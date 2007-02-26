@@ -23,13 +23,14 @@ sub FindSubversion
 
 sub new
 {
-    my ($Class, %Param) = @_;
+    my ($Class, @Params) = @_;
 
-    return bless
-    {
-        MyName => ($Param{MyName} || $Class),
-        SvnPath => ($Param{SvnPath} || FindSubversion())
-    }, $Class
+    my %Param = @Params;
+
+    $Param{MyName} ||= $Class;
+    $Param{SvnPath} ||= FindSubversion();
+
+    return bless \%Param, $Class
 }
 
 sub GetSvnPath
