@@ -30,13 +30,7 @@ sub Run
 
 sub ReadLine
 {
-    my ($Self) = @_;
-
-    my $Line = readline $Self->{ReadFH};
-
-    chomp $Line if $Line;
-
-    return $Line
+    return readline $_[0]->{ReadFH}
 }
 
 sub Close
@@ -197,6 +191,8 @@ sub ReadInfo
 
     while (defined($Line = $Stream->ReadLine()))
     {
+        chomp $Line;
+
         if ($Line =~ m/^Path: (.*?)$/os)
         {
             $Path = $1
@@ -316,17 +312,15 @@ sub GetLatestRevision
 
     while (defined($Line = $Stream->ReadLine()))
     {
-        if ($Line =~ m/^Revision: (.*)$/os)
+        if ($Line =~ m/^Revision: (\d+)/os)
         {
             $Revision = $1;
             last
         }
     }
 
-    while (defined($Stream->ReadLine()))
-    {
-    }
-
+    local $/ = undef;
+    $Stream->ReadLine();
     $Stream->Close();
 
     return $Revision
@@ -358,6 +352,7 @@ sub ReadSubversionLines
 
     while (defined($Line = $Stream->ReadLine()))
     {
+        chomp $Line;
         push @Lines, $Line
     }
 
