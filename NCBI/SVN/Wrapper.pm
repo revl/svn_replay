@@ -206,7 +206,7 @@ sub ReadInfo
 
     while (defined($Line = $Stream->ReadLine()))
     {
-        chomp $Line;
+        $Line =~ s/[\r\n]+$//so;
 
         if ($Line =~ m/^Path: (.*?)$/os)
         {
@@ -305,7 +305,7 @@ sub ReadLog
 
     $Stream->Close();
 
-    chomp $_->{LogMessage} for @Revisions;
+    $_->{LogMessage} =~ s/[\r\n]+$//so for @Revisions;
 
     return \@Revisions;
 
@@ -367,7 +367,7 @@ sub ReadSubversionLines
 
     while (defined($Line = $Stream->ReadLine()))
     {
-        chomp $Line;
+        $Line =~ s/[\r\n]+$//so;
         push @Lines, $Line
     }
 
