@@ -1,6 +1,5 @@
 use strict;
 use warnings;
-use Carp qw(confess);
 
 package NCBI::SVN::Wrapper::Stream;
 
@@ -51,6 +50,8 @@ sub Close
 }
 
 package NCBI::SVN::Wrapper;
+
+use Carp qw(confess);
 
 sub FindProgram
 {
