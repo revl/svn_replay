@@ -61,7 +61,7 @@ sub FindProgram
     {
         my $Pathname = File::Spec->catfile($Path, $Program);
 
-        return $Pathname if -x $Pathname
+        return $Pathname if -f $Pathname
     }
 
     return undef
@@ -72,7 +72,7 @@ sub FindSubversion
     my ($Self) = @_;
 
     my ($SvnMUCCName, $MUCCName, @SvnNames) =
-        $^O ne 'MSWin32' ? qw(svnmucc mucc svn) :
+        $^O ne 'MSWin32' && $^O ne 'cygwin' ? qw(svnmucc mucc svn) :
             qw(svnmucc.exe mucc.exe svn.bat svn.exe);
 
     my ($SvnPathname, $SvnMUCCPathname, $MUCCPathname);
