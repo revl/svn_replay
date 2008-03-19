@@ -199,9 +199,9 @@ sub ReadFileLines
 
 sub ReadInfo
 {
-    my ($Self, @Dirs) = @_;
+    my ($Self, @Paths) = @_;
 
-    my $Stream = $Self->Run('info', @Dirs);
+    my $Stream = $Self->Run('info', @Paths);
 
     my %Info;
     my $Path;
@@ -224,18 +224,23 @@ sub ReadInfo
         {
             $Info{$Path}->{Root} = $1
         }
+        elsif (my ($Key, $Value) = $Line =~ m/^(.+?): (.*?)$/os)
+        {
+            $Key =~ s/ //go;
+            $Info{$Path}->{$Key} = $Value
+        }
     }
 
     my $Root;
 
-    for my $DirInfo (values %Info)
+    for my $PathInfo (values %Info)
     {
-        ($Root, $Path) = @$DirInfo{qw(Root Path)};
+        ($Root, $Path) = @$PathInfo{qw(Root Path)};
 
 
         substr($Path, 0, length($Root), '') eq $Root or die;
 
-        $DirInfo->{Path} = length($Path) > 0 ?
+        $PathInfo->{Path} = length($Path) > 0 ?
             substr($Path, 0, 1, '') eq '/' ? $Path : die : '.'
     }
 
