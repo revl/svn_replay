@@ -52,6 +52,7 @@ sub Close
 package NCBI::SVN::Wrapper;
 
 use Carp qw(confess);
+use Time::Local;
 
 sub FindProgram
 {
@@ -275,7 +276,7 @@ sub ReadLog
 
     my @Revisions;
     my $CurrentRevision;
-    my $NumberOfLogLines;
+    my ($Time, $NumberOfLogLines);
 
     while (defined($Line = $Stream->ReadLine()))
     {
@@ -306,9 +307,18 @@ sub ReadLog
 
             push @Revisions, ($CurrentRevision = \%NewRev);
 
-            (@NewRev{qw(Number Author)}, $NumberOfLogLines) = $Line =~
-                m/^r(\d+) \| (.+?) \| .+? \| (\d+) lines?$/o or
+            (@NewRev{qw(Number Author)}, $Time, $NumberOfLogLines) = $Line =~
+                m/^r(\d+) \| (.+?) \| (.+?) \(.+?\) \| (\d+) lines?$/o or
                     LogParsingError($Stream, $CurrentRevision, $State, $Line);
+
+            my ($Year, $Month, $Day, $Hour, $Min, $Sec) =
+                $Time =~ m/^(....)-(..)-(..) (..):(..):(..)/o;
+
+            ($Sec, $Min, $Hour, $Day, $Month, $Year) = gmtime(timelocal($Sec,
+                $Min, $Hour, $Day, $Month - 1, $Year - 1900));
+
+            $NewRev{Time} = sprintf('%4d-%02d-%02dT%02d:%02d:%02d.000000Z',
+                $Year + 1900, $Month + 1, $Day, $Hour, $Min, $Sec);
 
             $State = $NumberOfLogLines > 0 ? 'changed_path_header' : 'initial'
         }
