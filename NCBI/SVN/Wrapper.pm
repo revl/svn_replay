@@ -186,23 +186,23 @@ sub Run
 
 sub ReadFile
 {
-    my ($Self, $URL) = @_;
+    my ($Self, @Args) = @_;
 
-    return $Self->ReadSubversionStream('cat', $URL)
+    return $Self->ReadSubversionStream('cat', @Args)
 }
 
 sub ReadFileLines
 {
-    my ($Self, $URL) = @_;
+    my ($Self, @Args) = @_;
 
-    return $Self->ReadSubversionLines('cat', $URL)
+    return $Self->ReadSubversionLines('cat', @Args)
 }
 
 sub ReadInfo
 {
-    my ($Self, @Paths) = @_;
+    my ($Self, @Args) = @_;
 
-    my $Stream = $Self->Run('info', @Paths);
+    my $Stream = $Self->Run('info', @Args);
 
     my %Info;
     my $Path;
