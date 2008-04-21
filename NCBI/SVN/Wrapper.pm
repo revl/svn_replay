@@ -238,7 +238,6 @@ sub ReadInfo
     {
         ($Root, $Path) = @$PathInfo{qw(Root Path)};
 
-
         substr($Path, 0, length($Root), '') eq $Root or die;
 
         $PathInfo->{Path} = length($Path) > 0 ?
@@ -248,6 +247,90 @@ sub ReadInfo
     $Stream->Close();
 
     return \%Info
+}
+
+sub ReadProps
+{
+    my ($Self, @Args) = @_;
+
+    my $Stream = $Self->Run(qw(proplist --verbose), @Args);
+
+    my %Props;
+    my $Path;
+    my $PropName;
+    my $PropValue;
+    my $Line;
+
+    while (defined($Line = $Stream->ReadLine()))
+    {
+        $Line =~ s/[\r\n]+$//so;
+
+        if ($Line =~ m/^Properties on '(.+)':$/o)
+        {
+            if ($Path && $PropName)
+            {
+                $Props{$Path}->{$PropName} = $PropValue;
+                $PropName = undef
+            }
+
+            $Path = $1
+        }
+        elsif ($Line =~ m/^  (.+) : (.*)$/o)
+        {
+            $Props{$Path}->{$PropName} = $PropValue if $PropName;
+
+            ($PropName, $PropValue) = ($1, $2)
+        }
+        else
+        {
+            $PropValue .= $Line
+        }
+    }
+
+    $Props{$Path}->{$PropName} = $PropValue if $Path && $PropName;
+
+    $Stream->Close();
+
+    return \%Props
+}
+
+sub ReadRevProps
+{
+    my ($Self, $Revision, @Args) = @_;
+
+    my $Stream = $Self->Run(qw(proplist --revprop --verbose -r),
+        $Revision, @Args);
+
+    $Stream->ReadLine() =~ m/^Unversioned properties on revision (\d+):/;
+
+    defined $1 && $1 eq $Revision || die 'Invalid proplist output';
+
+    my %Props;
+    my $PropName;
+    my $PropValue;
+    my $Line;
+
+    while (defined($Line = $Stream->ReadLine()))
+    {
+        $Line =~ s/[\r\n]+$//so;
+
+        if ($Line =~ m/^  (.+) : (.*)$/o)
+        {
+            $Props{$PropName} = $PropValue if $PropName;
+
+            ($PropName, $PropValue) = ($1, $2)
+        }
+        else
+        {
+            $PropValue .= $Line
+        }
+    }
+
+    $Props{$PropName} = $PropValue if $PropName;
+
+    $Stream->Close();
+
+    return \%Props
 }
 
 sub LogParsingError
