@@ -2,32 +2,39 @@
 
 use strict;
 
-my ($ScriptDir, $ScriptName);
+my ($LibDir, $ScriptName);
 
 use File::Spec;
 
 BEGIN
 {
     my $Volume;
-    my $NewScriptDir;
 
-    my $ScriptPathname = $0;
+    ($Volume, $LibDir, $ScriptName) = File::Spec->splitpath($0);
 
-    ($Volume, $ScriptDir, $ScriptName) = File::Spec->splitpath($ScriptPathname);
+    $LibDir = File::Spec->catpath($Volume, $LibDir, '');
 
-    $ScriptDir = File::Spec->rel2abs(File::Spec->catpath($Volume,
-        $ScriptDir, ''));
-
-    while ($ScriptPathname = eval {readlink $ScriptPathname})
+    if (my $RealPathname = eval {readlink $0})
     {
-        ($Volume, $NewScriptDir) = File::Spec->splitpath($ScriptPathname);
+        do
+        {
+            $RealPathname = File::Spec->rel2abs($RealPathname, $LibDir);
 
-        $ScriptDir = File::Spec->rel2abs(File::Spec->catpath($Volume,
-            $NewScriptDir, ''), $ScriptDir);
+            ($Volume, $LibDir, undef) = File::Spec->splitpath($RealPathname);
+
+            $LibDir = File::Spec->catpath($Volume, $LibDir, '')
+        }
+        while ($RealPathname = eval {readlink $RealPathname})
     }
+    else
+    {
+        $LibDir = File::Spec->rel2abs($LibDir)
+    }
+
+    $LibDir = File::Spec->catdir($LibDir, 'lib')
 }
 
-use lib $ScriptDir;
+use lib $LibDir;
 
 use NCBI::SVN::Replay;
 
