@@ -407,10 +407,18 @@ sub ReadLog
         }
         elsif ($State eq 'changed_path_header')
         {
-            LogParsingError($Stream, $CurrentRevision, $State, $Line)
-                if $Line ne 'Changed paths:';
-
-            $State = 'changed_path'
+            if ($Line eq 'Changed paths:')
+            {
+                $State = 'changed_path'
+            }
+            elsif ($Line eq '')
+            {
+                $State = 'log_message'
+            }
+            else
+            {
+                LogParsingError($Stream, $CurrentRevision, $State, $Line)
+            }
         }
         elsif ($State eq 'initial')
         {
