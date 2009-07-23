@@ -234,17 +234,15 @@ sub ApplyRevisionChanges
         {
             print $Output;
 
-            $SVN->RunSubversion(@AuthParams,
-                qw(ps --non-interactive --revprop -r),
-                    $NewRevision, $OriginalRevPropName, $RevisionNumber);
-
             my $RevProps = $SVN->ReadRevProps($RevisionNumber,
                 '--non-interactive', $RootURL);
 
+            delete $RevProps->{'svn:log'};
+
+            $RevProps->{$OriginalRevPropName} = $RevisionNumber;
+
             while (my ($Name, $Value) = each %$RevProps)
             {
-                next if $Name eq 'svn:log';
-
                 $SVN->RunSubversion(@AuthParams,
                     qw(ps --non-interactive --revprop -r),
                         $NewRevision, $Name, $Value)
@@ -426,7 +424,7 @@ sub Run
     }
 
     print $LineContinuation . ($ChangesApplied ?
-        "$ChangesApplied changes applied.\n" : 'no relevant changes');
+        "$ChangesApplied change(s) applied.\n" : "no relevant changes.\n");
 
     return 0
 }
