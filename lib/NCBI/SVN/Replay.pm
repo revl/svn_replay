@@ -104,8 +104,6 @@ sub ApplyRevisionChanges
 
     my $Changed = 0;
 
-    print "Applying r$RevisionNumber of $RepoName...\n";
-
     # Sort changes by the change type (Add first, then Delete)
     # sort {$a->[0] cmp $b->[0]}
     for (@{$Revision->{ChangedPaths}})
@@ -117,6 +115,8 @@ sub ApplyRevisionChanges
         unless ($Changed)
         {
             $Changed = 1;
+
+            print "Applying r$RevisionNumber of $RepoName...\n";
 
             $SVN->RunSubversion(
                 qw(update --ignore-externals --non-interactive), $TargetPath)
@@ -255,10 +255,8 @@ sub ApplyRevisionChanges
             print "WARNING: no changes detected.\n"
         }
     }
-    else
-    {
-        print $LineContinuation . "skipped.\n"
-    }
+
+    return $Changed
 }
 
 sub IsNewer
@@ -418,12 +416,17 @@ sub Run
 
     print "Applying new revision changes...\n";
 
+    my $ChangesApplied = 0;
+
     while (my $Revisions = PopRevisionArray(\@RevisionArrayHeap))
     {
-        ApplyRevisionChanges($SVN, shift @$Revisions);
+        $ChangesApplied += ApplyRevisionChanges($SVN, shift @$Revisions);
 
         PushRevisionArray(\@RevisionArrayHeap, $Revisions) if @$Revisions
     }
+
+    print $LineContinuation . ($ChangesApplied ?
+        "$ChangesApplied changes applied.\n" : 'no relevant changes');
 
     return 0
 }
