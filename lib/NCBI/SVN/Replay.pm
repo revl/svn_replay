@@ -111,7 +111,13 @@ sub ApplyRevisionChanges
 
         next unless $SourcePathFilter->($Path);
 
-        $Changed = 1;
+        unless ($Changed)
+        {
+            $Changed = 1;
+
+            $SVN->RunSubversion(
+                qw(update --ignore-externals --non-interactive), $TargetPath)
+        }
 
         my $TargetFilePathname = $Path;
 
@@ -152,8 +158,16 @@ sub ApplyRevisionChanges
                 }
                 else
                 {
-                    $SVN->RunSubversion(qw(mkdir --non-interactive),
-                        $TargetFilePathname)
+                    eval
+                    {
+                        $SVN->RunSubversion(qw(mkdir --non-interactive),
+                            $TargetFilePathname)
+                    };
+                    if ($@)
+                    {
+                        print 'WARNING: Could not mkdir ' .
+                            $TargetFilePathname . ": $@\n"
+                    }
                 }
 
                 $ResetProps = 1
@@ -208,8 +222,7 @@ sub ApplyRevisionChanges
     if ($Changed)
     {
         my $Output = $SVN->ReadSubversionStream(qw(commit --non-interactive -m),
-            $Revision->{LogMessage}, '--username', $Revision->{Author},
-                $TargetPath);
+            $Revision->{LogMessage}, '--username', 'syncbot', $TargetPath);
 
         my ($NewRevision) = $Output =~ m/Committed revision (\d+)\./o;
 
@@ -225,10 +238,11 @@ sub ApplyRevisionChanges
 
             while (my ($Name, $Value) = each %$RevProps)
             {
-                next if $Name eq 'svn:author' or $Name eq 'svn:log';
+                next if $Name eq 'svn:log';
 
-                $SVN->RunSubversion(qw(propset --non-interactive --revprop -r),
-                    $NewRevision, $Name, $Value)
+                $SVN->RunSubversion(
+                    qw(ps --non-interactive --username syncbot --revprop -r),
+                        $NewRevision, $Name, $Value)
             }
         }
         else
@@ -308,29 +322,32 @@ sub Run
     }
 
     # Check for target path conflicts.
-    my %VerificationTree;
-
-    for my $Path (@TargetPaths)
+    unless ($Conf->{AllowTargetPathOverlap})
     {
-        my $SubTree = \%VerificationTree;
+        my %VerificationTree;
 
-        for my $Dir (split('/', $Path))
+        for my $Path (@TargetPaths)
         {
-            if ($SubTree->{'/'})
+            my $SubTree = \%VerificationTree;
+
+            for my $Dir (split('/', $Path))
             {
-                die "$Self->{MyName}: target path conflict: " .
-                    "'$SubTree->{'/'}' includes '$Path'.\n"
+                if ($SubTree->{'/'})
+                {
+                    die "$Self->{MyName}: target path conflict: " .
+                        "'$SubTree->{'/'}' includes '$Path'.\n"
+                }
+
+                $SubTree = ($SubTree->{$Dir} ||= {})
             }
 
-            $SubTree = ($SubTree->{$Dir} ||= {})
-        }
+            if (%$SubTree)
+            {
+                die "$Self->{MyName}: target path '$Path' overlaps other path(s).\n"
+            }
 
-        if (%$SubTree)
-        {
-            die "$Self->{MyName}: target path '$Path' overlaps other path(s).\n"
+            $SubTree->{'/'} = $Path
         }
-
-        $SubTree->{'/'} = $Path
     }
 
     chdir $Conf->{TargetWorkingCopy};
@@ -367,6 +384,11 @@ sub Run
 
         my $Revisions = eval {$SVN->ReadLog('--non-interactive',
             '-rHEAD:' . ($LastOriginalRev + 1), $RootURL)} || [];
+
+        if ($@)
+        {
+            print "WARNING: error while reading revision log: $@\n"
+        }
 
         print $LineContinuation . scalar(@$Revisions) . " new revisions.\n";
 
