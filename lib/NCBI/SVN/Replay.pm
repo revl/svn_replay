@@ -5,6 +5,9 @@ use warnings;
 
 use base qw(NCBI::SVN::Base);
 
+my @AuthParams = qw(--username syncbot --password allowed);
+my $OriginalRevPropName = 'ncbi:original-revision';
+
 my $LineContinuation = '  ... ';
 
 sub IsFile
@@ -50,8 +53,8 @@ sub FindSourceRev
             $RevisionNumber = $Revision->{Number};
 
             my $OriginalRev = $SVN->ReadSubversionStream(
-                qw(pg --non-interactive --revprop ncbi:original-revision -r),
-                    $RevisionNumber, $URL);
+                qw(pg --non-interactive --revprop -r),
+                    $RevisionNumber, $OriginalRevPropName, $URL);
 
             die "Could not get original revision for $SourceRev\n"
                 unless $OriginalRev;
@@ -221,8 +224,9 @@ sub ApplyRevisionChanges
 
     if ($Changed)
     {
-        my $Output = $SVN->ReadSubversionStream(qw(commit --non-interactive -m),
-            $Revision->{LogMessage}, '--username', 'syncbot', $TargetPath);
+        my $Output = $SVN->ReadSubversionStream(@AuthParams,
+            qw(commit --non-interactive -m),
+                $Revision->{LogMessage}, $TargetPath);
 
         my ($NewRevision) = $Output =~ m/Committed revision (\d+)\./o;
 
@@ -230,8 +234,9 @@ sub ApplyRevisionChanges
         {
             print $Output;
 
-            $SVN->RunSubversion(qw(propset --non-interactive --revprop
-                ncbi:original-revision -r), $NewRevision, $RevisionNumber);
+            $SVN->RunSubversion(@AuthParams,
+                qw(ps --non-interactive --revprop -r),
+                    $NewRevision, $OriginalRevPropName, $RevisionNumber);
 
             my $RevProps = $SVN->ReadRevProps($RevisionNumber,
                 '--non-interactive', $RootURL);
@@ -240,8 +245,8 @@ sub ApplyRevisionChanges
             {
                 next if $Name eq 'svn:log';
 
-                $SVN->RunSubversion(
-                    qw(ps --non-interactive --username syncbot --revprop -r),
+                $SVN->RunSubversion(@AuthParams,
+                    qw(ps --non-interactive --revprop -r),
                         $NewRevision, $Name, $Value)
             }
         }
@@ -369,10 +374,16 @@ sub Run
         $SourceRepoConf->{TargetPathInfo} = $Info;
 
         my $LastOriginalRev = $SVN->ReadSubversionStream(
-            qw(propget --non-interactive --revprop ncbi:original-revision -r),
-                $Info->{LastChangedRev}, $TargetPath) || 0;
+            qw(pg --non-interactive --revprop -r),
+                $Info->{LastChangedRev}, $OriginalRevPropName, $TargetPath);
 
         chomp $LastOriginalRev;
+
+        if ($LastOriginalRev eq '')
+        {
+            die "Revision property '$OriginalRevPropName' is not set for r" .
+                $Info->{LastChangedRev} . ".\n"
+        }
 
         my $RootURL = $SourceRepoConf->{RootURL};
 
