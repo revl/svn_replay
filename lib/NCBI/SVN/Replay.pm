@@ -90,6 +90,23 @@ sub FindSourceRev
     }
 }
 
+my $TargetPathInfo;
+
+sub TransformPath
+{
+    my ($RepoConf, $Path) = @_;
+
+    $RepoConf->{PathnameTransform}->($Path);
+
+    for my $TargetDirectory (@{$RepoConf->{TargetPaths}})
+    {
+        return ($Path, $TargetDirectory)
+            if substr($Path, 0, length($TargetDirectory)) eq $TargetDirectory
+    }
+
+    die "Transformed path $Path does not match any of the target directories.\n"
+}
+
 sub ApplyRevisionChanges
 {
     my ($SVN, $Revision) = @_;
@@ -97,10 +114,8 @@ sub ApplyRevisionChanges
     my ($SourceRepoConf, $RevisionNumber) =
         @$Revision{qw(SourceRepoConf Number)};
 
-    my ($RootURL, $RepoName, $SourcePathFilter,
-        $PathnameTransform, $TargetPath, $TargetPathInfo) =
-            @$SourceRepoConf{qw(RootURL RepoName SourcePathFilter
-                PathnameTransform TargetPath TargetPathInfo)};
+    my ($RootURL, $SourcePathFilter) =
+        @$SourceRepoConf{qw(RootURL SourcePathFilter)};
 
     my $Changed = 0;
 
@@ -116,17 +131,14 @@ sub ApplyRevisionChanges
         {
             $Changed = 1;
 
-            print "Applying r$RevisionNumber of $RepoName...\n";
+            print "Applying r$RevisionNumber of the '" .
+                $SourceRepoConf->{RepoName} . "' repository ...\n";
 
-            $SVN->RunSubversion(
-                qw(update --ignore-externals --non-interactive), $TargetPath)
+            $SVN->RunSubversion(qw(update --ignore-externals --non-interactive),
+                @{$SourceRepoConf->{TargetPaths}})
         }
 
-        my $TargetFilePathname = $Path;
-
-        $PathnameTransform->($TargetFilePathname);
-
-        $TargetFilePathname = "$TargetPath/$TargetFilePathname";
+        my ($TargetFilePathname) = TransformPath($SourceRepoConf, $Path);
 
         my $ResetProps;
 
@@ -134,14 +146,11 @@ sub ApplyRevisionChanges
         {
             if ($SourcePath && $SourcePathFilter->($SourcePath))
             {
-                my $SourceFilePathname = $SourcePath;
-
-                $PathnameTransform->($SourceFilePathname);
-
-                $SourceFilePathname = "$TargetPath/$SourceFilePathname";
+                my ($SourceFilePathname, $TargetPath) =
+                    TransformPath($SourceRepoConf, $SourcePath);
 
                 $SourceRev = FindSourceRev($SVN, $SourceRev,
-                    "$TargetPathInfo->{Root}/$TargetPath");
+                    $TargetPathInfo->{$TargetPath}->{Root} . '/' . $TargetPath);
 
                 print $LineContinuation . 'cp -r ' .
                     "$SourceRev $SourceFilePathname $TargetFilePathname\n";
@@ -226,7 +235,7 @@ sub ApplyRevisionChanges
     {
         my $Output = $SVN->ReadSubversionStream(@AuthParams,
             qw(commit --non-interactive -m),
-                $Revision->{LogMessage}, $TargetPath);
+                $Revision->{LogMessage}, @{$SourceRepoConf->{TargetPaths}});
 
         my ($NewRevision) = $Output =~ m/Committed revision (\d+)\./o;
 
@@ -315,70 +324,87 @@ sub Run
 
     my $SourceRepositories = $Conf->{SourceRepositories};
 
-    my @TargetPaths = map {$_->{TargetPath}} @$SourceRepositories;
-
-    if (@TargetPaths == 0)
+    if (@$SourceRepositories == 0)
     {
-        die "$Self->{MyName}: at least one target path must be specified.\n"
+        die "$Self->{MyName}: missing required parameter SourceRepositories.\n"
+    }
+
+    my @TargetPaths;
+
+    for my $SourceRepoConf (@$SourceRepositories)
+    {
+        unless ($SourceRepoConf->{TargetPaths})
+        {
+            $SourceRepoConf->{TargetPaths} = [$SourceRepoConf->{TargetPath} or
+                die "$Self->{MyName}: missing required " .
+                    "parameter TargetPath(s).\n"]
+        }
+        elsif ($SourceRepoConf->{TargetPath})
+        {
+            die "$Self->{MyName}: parameters TargetPath and " .
+                "TargetPaths are mutually exclusive.\n"
+        }
+        push @TargetPaths, @{$SourceRepoConf->{TargetPaths}}
     }
 
     # Check for target path conflicts.
-    unless ($Conf->{AllowTargetPathOverlap})
+    my %VerificationTree;
+
+    for my $Path (@TargetPaths)
     {
-        my %VerificationTree;
+        my $SubTree = \%VerificationTree;
 
-        for my $Path (@TargetPaths)
+        for my $Dir (split('/', $Path))
         {
-            my $SubTree = \%VerificationTree;
-
-            for my $Dir (split('/', $Path))
+            if ($SubTree->{'/'})
             {
-                if ($SubTree->{'/'})
-                {
-                    die "$Self->{MyName}: target path conflict: " .
-                        "'$SubTree->{'/'}' includes '$Path'.\n"
-                }
-
-                $SubTree = ($SubTree->{$Dir} ||= {})
+                die "$Self->{MyName}: target path conflict: " .
+                    "'$SubTree->{'/'}' includes '$Path'.\n"
             }
 
-            if (%$SubTree)
-            {
-                die "$Self->{MyName}: target path '$Path' overlaps other path(s).\n"
-            }
-
-            $SubTree->{'/'} = $Path
+            $SubTree = ($SubTree->{$Dir} ||= {})
         }
+
+        if (%$SubTree)
+        {
+            die "$Self->{MyName}: target path '$Path' overlaps other path(s).\n"
+        }
+
+        $SubTree->{'/'} = $Path
     }
 
-    chdir $Conf->{TargetWorkingCopy};
+    chdir $Conf->{TargetWorkingCopy} or
+        die "$Self->{MyName}: could not chdir to $Conf->{TargetWorkingCopy}.\n";
 
     $SVN->RunSubversion(qw(update --ignore-externals --non-interactive),
         @TargetPaths);
 
-    my $TargetPathInfo = $SVN->ReadInfo(@TargetPaths);
+    $TargetPathInfo = $SVN->ReadInfo(@TargetPaths);
 
     my @RevisionArrayHeap;
 
     for my $SourceRepoConf (@$SourceRepositories)
     {
-        my $TargetPath = $SourceRepoConf->{TargetPath};
+        my $LastOriginalRev = 0;
 
-        my $Info = $TargetPathInfo->{$TargetPath}
-            or die "$Self->{MyName}: could not get svn info on $TargetPath.\n";
-
-        $SourceRepoConf->{TargetPathInfo} = $Info;
-
-        my $LastOriginalRev = $SVN->ReadSubversionStream(
-            qw(pg --non-interactive --revprop -r),
-                $Info->{LastChangedRev}, $OriginalRevPropName, $TargetPath);
-
-        chomp $LastOriginalRev;
-
-        if ($LastOriginalRev eq '')
+        for my $TargetPath (@{$SourceRepoConf->{TargetPaths}})
         {
-            die "Revision property '$OriginalRevPropName' is not set for r" .
-                $Info->{LastChangedRev} . ".\n"
+            my $Info = $TargetPathInfo->{$TargetPath}
+                or die "$Self->{MyName}: could not get svn info on '$TargetPath'.\n";
+
+            my $OriginalRev = $SVN->ReadSubversionStream(
+                qw(pg --non-interactive --revprop -r),
+                    $Info->{LastChangedRev}, $OriginalRevPropName, $TargetPath);
+
+            chomp $OriginalRev;
+
+            if ($OriginalRev eq '')
+            {
+                die "Revision property '$OriginalRevPropName' is not set for r" .
+                    $Info->{LastChangedRev} . ".\n"
+            }
+
+            $LastOriginalRev = $OriginalRev if $LastOriginalRev < $OriginalRev
         }
 
         my $RootURL = $SourceRepoConf->{RootURL};
@@ -387,15 +413,13 @@ sub Run
 
         $SourceRepoConf->{RepoName} = $RepoName;
 
-        print "Reading what's new in $RepoName since r$LastOriginalRev...\n";
+        print "Reading what's new in the '$RepoName' " .
+            "repository since r$LastOriginalRev...\n";
 
-        my $Revisions = eval {$SVN->ReadLog('--non-interactive',
-            '-rHEAD:' . ($LastOriginalRev + 1), $RootURL)} || [];
+        my $Revisions = $SVN->ReadLog('--non-interactive',
+            '-rHEAD:' . $LastOriginalRev, $RootURL);
 
-        if ($@)
-        {
-            print "WARNING: error while reading revision log: $@\n"
-        }
+        pop(@$Revisions)->{Number} == $LastOriginalRev or die 'Logic error';
 
         print $LineContinuation . scalar(@$Revisions) . " new revisions.\n";
 
