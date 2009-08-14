@@ -136,6 +136,16 @@ sub ApplyRevisionChanges
 
             $SVN->RunSubversion(qw(update --ignore-externals --non-interactive),
                 @{$SourceRepoConf->{TargetPaths}})
+
+            my @LocalChanges = grep(!m/^X/o, $SVN->ReadSubversionLines(
+                qw(status --ignore-externals --non-interactive),
+                    @{$SourceRepoConf->{TargetPaths}}));
+
+            if (@LocalChanges)
+            {
+                local $" = "\n  ";
+                die "Error: local changes detected:$"@LocalChanges\n"
+            }
         }
 
         my ($TargetFilePathname) = TransformPath($SourceRepoConf, $Path);
