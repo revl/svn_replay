@@ -135,7 +135,7 @@ sub ApplyRevisionChanges
                 $SourceRepoConf->{RepoName} . "' repository ...\n";
 
             $SVN->RunSubversion(qw(update --ignore-externals --non-interactive),
-                @{$SourceRepoConf->{TargetPaths}})
+                @{$SourceRepoConf->{TargetPaths}});
 
             my @LocalChanges = grep(!m/^X/o, $SVN->ReadSubversionLines(
                 qw(status --ignore-externals --non-interactive),
@@ -144,7 +144,7 @@ sub ApplyRevisionChanges
             if (@LocalChanges)
             {
                 local $" = "\n  ";
-                die "Error: local changes detected:$"@LocalChanges\n"
+                die "Error: local changes detected:\n  @LocalChanges\n"
             }
         }
 
@@ -224,7 +224,8 @@ sub ApplyRevisionChanges
             my ($Props) = values %{$SVN->ReadProps(qw(--non-interactive -r),
                 $RevisionNumber, "$RootURL$Path\@$RevisionNumber")};
 
-            delete $Props->{'svn:externals'} if $RepoConf->{DiscardSvnExternals};
+            delete $Props->{'svn:externals'}
+                if $SourceRepoConf->{DiscardSvnExternals};
 
             while (my ($Name, $Value) = each %$Props)
             {
