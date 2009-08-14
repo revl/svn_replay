@@ -224,6 +224,8 @@ sub ApplyRevisionChanges
             my ($Props) = values %{$SVN->ReadProps(qw(--non-interactive -r),
                 $RevisionNumber, "$RootURL$Path\@$RevisionNumber")};
 
+            delete $Props->{'svn:externals'} if $RepoConf->{DiscardSvnExternals};
+
             while (my ($Name, $Value) = each %$Props)
             {
                 $SVN->RunSubversion(qw(propset --non-interactive),
