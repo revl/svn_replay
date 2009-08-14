@@ -5,7 +5,7 @@ use warnings;
 
 use base qw(NCBI::SVN::Base);
 
-my @AuthParams = qw(--username syncbot --password allowed);
+my $CommitCredentials;
 my $OriginalRevPropName = 'ncbi:original-revision';
 
 my $LineContinuation = '  ... ';
@@ -233,6 +233,9 @@ sub ApplyRevisionChanges
 
     if ($Changed)
     {
+        my @AuthParams = $CommitCredentials ? @$CommitCredentials :
+            ('--username', $Revision->{Author});
+
         my $Output = $SVN->ReadSubversionStream(@AuthParams,
             qw(commit --non-interactive -m),
                 $Revision->{LogMessage}, @{$SourceRepoConf->{TargetPaths}});
@@ -247,6 +250,7 @@ sub ApplyRevisionChanges
                 '--non-interactive', $RootURL);
 
             delete $RevProps->{'svn:log'};
+            delete $RevProps->{'svn:author'} unless $CommitCredentials;
 
             $RevProps->{$OriginalRevPropName} = $RevisionNumber;
 
@@ -321,6 +325,14 @@ sub Run
     my ($Self, $Conf) = @_;
 
     my $SVN = $Self->{SVN};
+
+    if ($CommitCredentials = $Conf->{CommitCredentials})
+    {
+        $CommitCredentials = ref $CommitCredentials ?
+            ['--username', $CommitCredentials->[0],
+                '--password', $CommitCredentials->[1]] :
+            ['--username', $CommitCredentials]
+    }
 
     my $SourceRepositories = $Conf->{SourceRepositories};
 
