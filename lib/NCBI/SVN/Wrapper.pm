@@ -20,9 +20,11 @@ sub Run
 
     my $WriteFH;
 
+    unshift @Args, '--non-interactive' unless grep {m/^add$/o} @Args;
+
     $Self->{PID} = open3($WriteFH, $Self->{ReadFH},
         $Self->{ErrorFH} = tempfile(),
-        $Self->{SVN}->GetSvnPathname(), '--non-interactive', @Args);
+        $Self->{SVN}->GetSvnPathname(), @Args);
 
     close $WriteFH
 }
@@ -275,7 +277,7 @@ sub ReadProps
 
             $Path = $1
         }
-        elsif ($Line =~ m/^  (.+) : (.*)$/o)
+        elsif ($Line =~ m/^  (.+?) : (.*)$/o)
         {
             $Props{$Path}->{$PropName} = $PropValue if $PropName;
 
@@ -314,7 +316,7 @@ sub ReadRevProps
     {
         $Line =~ s/[\r\n]+$//so;
 
-        if ($Line =~ m/^  (.+) : (.*)$/o)
+        if ($Line =~ m/^  (.+?) : (.*)$/o)
         {
             $Props{$PropName} = $PropValue if $PropName;
 
@@ -348,6 +350,11 @@ sub LogParsingError
     confess "$ErrorMessage\n"
 }
 
+sub IsLogSeparator
+{
+    return $_[0] =~ m/^-{70}/o
+}
+
 sub ReadLog
 {
     my ($Self, @LogParams) = @_;
@@ -359,7 +366,7 @@ sub ReadLog
 
     my @Revisions;
     my $CurrentRevision;
-    my ($Time, $NumberOfLogLines);
+    my $SeparatorOrLogLine;
 
     while (defined($Line = $Stream->ReadLine()))
     {
@@ -381,17 +388,43 @@ sub ReadLog
         }
         elsif ($State eq 'log_message')
         {
-            $State = 'initial' if --$NumberOfLogLines == 0;
-            $CurrentRevision->{LogMessage} .= $Line . "\n"
+            if (IsLogSeparator($Line))
+            {
+                $SeparatorOrLogLine = $Line;
+                $State = 'revision_header'
+            }
+            else
+            {
+                $CurrentRevision->{LogMessage} .= $Line . "\n"
+            }
         }
         elsif ($State eq 'revision_header')
         {
+            unless ($Line =~ m/^r\d+ \|/)
+            {
+                $CurrentRevision->{LogMessage} .= "$SeparatorOrLogLine\n";
+
+                if (IsLogSeparator($Line))
+                {
+                    $SeparatorOrLogLine = $Line
+                }
+                else
+                {
+                    $CurrentRevision->{LogMessage} .= $Line . "\n";
+                    $State = 'log_message'
+                }
+
+                next
+            }
+
             my %NewRev = (LogMessage => '', ChangedPaths => []);
 
             push @Revisions, ($CurrentRevision = \%NewRev);
 
-            (@NewRev{qw(Number Author)}, $Time, $NumberOfLogLines) = $Line =~
-                m/^r(\d+) \| (.+?) \| (.+?) \(.+?\) \| (\d+) lines?$/o or
+            my $Time;
+
+            (@NewRev{qw(Number Author)}, $Time) = $Line =~
+                m/^r(\d+) \| (.+?) \| (.+?) \(.+?\) \| \d+ lines?$/o or
                     LogParsingError($Stream, $CurrentRevision, $State, $Line);
 
             my ($Year, $Month, $Day, $Hour, $Min, $Sec) =
@@ -403,7 +436,7 @@ sub ReadLog
             $NewRev{Time} = sprintf('%4d-%02d-%02dT%02d:%02d:%02d.000000Z',
                 $Year + 1900, $Month + 1, $Day, $Hour, $Min, $Sec);
 
-            $State = $NumberOfLogLines > 0 ? 'changed_path_header' : 'initial'
+            $State = 'changed_path_header'
         }
         elsif ($State eq 'changed_path_header')
         {
@@ -423,7 +456,7 @@ sub ReadLog
         elsif ($State eq 'initial')
         {
             LogParsingError($Stream, $CurrentRevision, $State, $Line)
-                unless $Line =~ m/^-{70}/o;
+                unless IsLogSeparator($Line);
 
             $State = 'revision_header'
         }
@@ -431,7 +464,12 @@ sub ReadLog
 
     $Stream->Close();
 
-    $_->{LogMessage} =~ s/[\r\n]+$//so for @Revisions;
+    for my $Revision (@Revisions)
+    {
+        $Revision->{LogMessage} =~ s/[\r\n]+$//so;
+        $Revision->{LogMessage} =~ s/\r\n/\n/gso;
+        $Revision->{LogMessage} =~ s/\r/\n/gso
+    }
 
     return \@Revisions;
 }
