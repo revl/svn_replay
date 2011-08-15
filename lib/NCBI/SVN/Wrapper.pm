@@ -300,35 +300,25 @@ sub ReadRevProps
 {
     my ($Self, $Revision, @Args) = @_;
 
-    my $Stream = $Self->Run(qw(proplist --revprop --verbose -r),
-        $Revision, @Args);
+    my $Stream = $Self->Run(qw(proplist --revprop -r), $Revision, @Args);
 
     $Stream->ReadLine() =~ m/^Unversioned properties on revision (\d+):/;
 
     defined $1 && $1 eq $Revision || die 'Invalid proplist output';
 
     my %Props;
-    my $PropName;
-    my $PropValue;
     my $Line;
 
     while (defined($Line = $Stream->ReadLine()))
     {
         $Line =~ s/[\r\n]+$//so;
 
-        if ($Line =~ m/^  (.+?) : (.*)$/o)
-        {
-            $Props{$PropName} = $PropValue if $PropName;
+        my ($PropName) = $Line =~ m/^\s*(.+?)$/so
+            or die 'Unexpected proplist output';
 
-            ($PropName, $PropValue) = ($1, $2)
-        }
-        else
-        {
-            $PropValue .= $Line
-        }
+        chomp($Props{$PropName} = $Self->ReadSubversionStream(
+            qw(propget --revprop -r), $Revision, $PropName, @Args))
     }
-
-    $Props{$PropName} = $PropValue if $PropName;
 
     $Stream->Close();
 
