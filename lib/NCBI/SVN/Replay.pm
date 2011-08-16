@@ -333,9 +333,28 @@ sub PopRevisionArray
     return pop @$Heap
 }
 
+sub LoadConf
+{
+    my ($Self, $ConfFile) = @_;
+
+    my $Conf = do $ConfFile;
+
+    unless (ref($Conf) eq 'HASH')
+    {
+        die "$Self->{MyName}: $@\n" if $@;
+        die "$Self->{MyName}: $ConfFile\: $!\n" unless defined $Conf;
+        die "$Self->{MyName}: configuration file " .
+            "'$ConfFile' must return a hash\n"
+    }
+
+    return $Conf
+}
+
 sub Run
 {
-    my ($Self, $Conf) = @_;
+    my ($Self, $ConfFile) = @_;
+
+    my $Conf = $Self->LoadConf($ConfFile);
 
     my $SVN = $Self->{SVN};
 
@@ -474,6 +493,75 @@ sub Run
 
     print $LineContinuation . ($ChangesApplied ?
         "$ChangesApplied change(s) applied.\n" : "no relevant changes.\n");
+
+    return 0
+}
+
+sub Init
+{
+    my ($Self, $InitPath, $ConfFile) = @_;
+
+    if (-d $InitPath)
+    {
+        die "$Self->{MyName}: cannot create repository: " .
+            "$InitPath already exists.\n"
+    }
+
+    my $Conf = $Self->LoadConf($ConfFile);
+
+    my $TargetWorkingCopy = $Conf->{TargetWorkingCopy};
+
+    if (-d $TargetWorkingCopy)
+    {
+        die "$Self->{MyName}: error: the workinig copy " .
+            "directory '$TargetWorkingCopy' already exists.\n"
+    }
+
+    my $SVN = $Self->{SVN};
+
+    my $EarliestRevisionTime;
+
+    print "Picking the earliest revision date...\n";
+
+    for my $SourceRepoConf (@{$Conf->{SourceRepositories}})
+    {
+        my $InitialRevisionTime = $SVN->ReadRevProps(1,
+            $SourceRepoConf->{RootURL})->{'svn:date'};
+        unless ($EarliestRevisionTime)
+        {
+            $EarliestRevisionTime = $InitialRevisionTime
+        }
+        elsif ($EarliestRevisionTime gt $InitialRevisionTime)
+        {
+            $EarliestRevisionTime = $InitialRevisionTime
+        }
+    }
+
+    die unless $EarliestRevisionTime;
+
+    print "Creating a new repository...\n";
+
+    $SVN->RunOrDie(qw(svnadmin create), $InitPath);
+
+    print "Installing a dummy pre-revprop-change hook script...\n";
+
+    my $HookScript = "$InitPath/hooks/pre-revprop-change";
+
+    open HOOK, '>', $HookScript or die "$HookScript: $!\n";
+    print HOOK "#!/bin/sh\n\nexit 0\n";
+    close HOOK;
+    chmod 0755, $HookScript or die "$HookScript: $!\n";
+
+    my $URL = 'file://' . $InitPath;
+
+    print "Setting svn:date...\n";
+
+    $SVN->RunSubversion(qw(propset --revprop -r0 svn:date),
+        $EarliestRevisionTime, $URL);
+
+    print "Checking out revision 0...\n";
+
+    $SVN->RunSubversion('checkout', $URL, $TargetWorkingCopy);
 
     return 0
 }

@@ -43,8 +43,12 @@ use Getopt::Long qw(:config permute no_getopt_compat no_ignore_case);
 sub Help
 {
     print <<EOF;
-Usage: $ScriptName <config_file>
+Usage: $ScriptName [-i REPO_PATH] <config_file>
 NCBI Subversion repository mirroring and restructuring tool.
+
+  -i, --init=REPO_PATH          Create a new target repository
+                                and check out revision 0 into
+                                a new working copy.
 
 See 'svn_replay.example.conf' for details.
 EOF
@@ -63,9 +67,10 @@ sub UsageError
 }
 
 # Command line options.
-my ($Help);
+my ($Help, $InitPath);
 
-GetOptions('help|h|?' => \$Help) or UsageError();
+GetOptions('help|h|?' => \$Help,
+    'i|init=s' => \$InitPath) or UsageError();
 
 # Configuration file name is the first non-option argument.
 my $ConfFile = shift @ARGV;
@@ -75,13 +80,7 @@ unless (defined $ConfFile)
     $Help ? Help() : UsageError()
 }
 
-my $Configuration;
+my $Instance = NCBI::SVN::Replay->new(MyName => $ScriptName);
 
-unless (ref($Configuration = do $ConfFile) eq 'HASH')
-{
-    die "$ScriptName\: $@\n" if $@;
-    die "$ScriptName\: $ConfFile\: $!\n" unless defined $Configuration;
-    die "$ScriptName\: configuration file '$ConfFile' must return a hash\n"
-}
-
-exit NCBI::SVN::Replay->new(MyName => $ScriptName)->Run($Configuration)
+exit(!$InitPath ? $Instance->Run($ConfFile) :
+    $Instance->Init($InitPath, $ConfFile))
