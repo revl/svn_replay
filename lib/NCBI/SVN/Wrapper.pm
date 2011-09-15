@@ -290,11 +290,17 @@ sub ReadProps
 
 sub ReadPropsImpl
 {
-    my ($Self, $HeaderLine, @Args) = @_;
+    my ($Self, $HeaderPattern, @Args) = @_;
 
     my $Stream = $Self->Run('proplist', @Args);
 
-    $Stream->ReadLine() =~ $HeaderLine or die 'Invalid proplist output';
+    {
+        my $Header = $Stream->ReadLine();
+
+        return {} unless $Header;
+
+        $Header =~ $HeaderPattern or die 'Invalid proplist output'
+    }
 
     my %Props;
     my $Line;
