@@ -251,16 +251,17 @@ sub ReadInfo
     return \%Info
 }
 
+# This method is deprecated -- it cannot be used to get
+# properties at a specific revision. ReadPathProps() must
+# be used instead.
 sub ReadProps
 {
-    my ($Self, @Args) = @_;
+    my ($Self, @Paths) = @_;
 
-    my $Stream = $Self->Run(qw(proplist --verbose), @Args);
+    my $Stream = $Self->Run('proplist', @Paths);
 
     my %Props;
     my $Path;
-    my $PropName;
-    my $PropValue;
     my $Line;
 
     while (defined($Line = $Stream->ReadLine()))
@@ -269,42 +270,31 @@ sub ReadProps
 
         if ($Line =~ m/^Properties on '(.+)':$/o)
         {
-            if ($Path && $PropName)
-            {
-                $Props{$Path}->{$PropName} = $PropValue;
-                $PropName = undef
-            }
-
             $Path = $1
         }
-        elsif ($Line =~ m/^  (.+?) : (.*)$/o)
+        elsif ($Line =~ m/^\s+(.+)$/o)
         {
-            $Props{$Path}->{$PropName} = $PropValue if $PropName;
-
-            ($PropName, $PropValue) = ($1, $2)
+            chomp($Props{$Path}->{$1} = $Self->ReadSubversionStream(
+                'propget', $1, $Path))
         }
         else
         {
-            $PropValue .= $Line
+            die 'Unexpected proplist output'
         }
     }
-
-    $Props{$Path}->{$PropName} = $PropValue if $Path && $PropName;
 
     $Stream->Close();
 
     return \%Props
 }
 
-sub ReadRevProps
+sub ReadPropsImpl
 {
-    my ($Self, $Revision, @Args) = @_;
+    my ($Self, $HeaderLine, @Args) = @_;
 
-    my $Stream = $Self->Run(qw(proplist --revprop -r), $Revision, @Args);
+    my $Stream = $Self->Run('proplist', @Args);
 
-    $Stream->ReadLine() =~ m/^Unversioned properties on revision (\d+):/;
-
-    defined $1 && $1 eq $Revision || die 'Invalid proplist output';
+    $Stream->ReadLine() =~ $HeaderLine or die 'Invalid proplist output';
 
     my %Props;
     my $Line;
@@ -313,16 +303,30 @@ sub ReadRevProps
     {
         $Line =~ s/[\r\n]+$//so;
 
-        my ($PropName) = $Line =~ m/^\s*(.+?)$/so
-            or die 'Unexpected proplist output';
+        $Line =~ m/^\s+(.+?)$/so or die 'Unexpected proplist output';
 
-        chomp($Props{$PropName} = $Self->ReadSubversionStream(
-            qw(propget --revprop -r), $Revision, $PropName, @Args))
+        chomp($Props{$1} = $Self->ReadSubversionStream('propget', $1, @Args))
     }
 
     $Stream->Close();
 
     return \%Props
+}
+
+sub ReadPathProps
+{
+    my ($Self, $Path, $Revision) = @_;
+
+    return $Self->ReadPropsImpl('^Properties on',
+        $Revision ? ('-r', $Revision, $Path . '@' . $Revision) : ($Path))
+}
+
+sub ReadRevProps
+{
+    my ($Self, $Revision, @URL) = @_;
+
+    return $Self->ReadPropsImpl('^Unversioned properties on revision',
+        qw(--revprop -r), $Revision, @URL)
 }
 
 sub LogParsingError
