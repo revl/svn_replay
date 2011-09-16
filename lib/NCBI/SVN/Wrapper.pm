@@ -292,26 +292,27 @@ sub ReadPropsImpl
 {
     my ($Self, $HeaderPattern, @Args) = @_;
 
+    my %Props;
+
     my $Stream = $Self->Run('proplist', @Args);
 
+    my $Header = $Stream->ReadLine();
+
+    if ($Header)
     {
-        my $Header = $Stream->ReadLine();
+        $Header =~ $HeaderPattern or die 'Invalid proplist output';
 
-        return {} unless $Header;
+        my $Line;
 
-        $Header =~ $HeaderPattern or die 'Invalid proplist output'
-    }
+        while (defined($Line = $Stream->ReadLine()))
+        {
+            $Line =~ s/[\r\n]+$//so;
 
-    my %Props;
-    my $Line;
+            $Line =~ m/^\s+(.+?)$/so or die 'Unexpected proplist output';
 
-    while (defined($Line = $Stream->ReadLine()))
-    {
-        $Line =~ s/[\r\n]+$//so;
-
-        $Line =~ m/^\s+(.+?)$/so or die 'Unexpected proplist output';
-
-        chomp($Props{$1} = $Self->ReadSubversionStream('propget', $1, @Args))
+            chomp($Props{$1} =
+                $Self->ReadSubversionStream('propget', $1, @Args))
+        }
     }
 
     $Stream->Close();
