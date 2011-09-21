@@ -5,6 +5,8 @@ use warnings;
 
 use base qw(NCBI::SVN::Base);
 
+use NCBI::SVN::Replay::Conf;
+
 use File::Find ();
 
 my $CommitCredentials;
@@ -96,8 +98,6 @@ sub TracePath
 {
     my ($Tree, $Path, $Descendants) = @_;
 
-    #my ($AncestorChange, $DescendantChange);
-
     return $Tree unless ref $Tree;
 
     my $Node = $Tree;
@@ -181,14 +181,7 @@ sub AddPath
     }
     else
     {
-        #eval
-        #{
-            $SVN->RunSubversion('mkdir', $TargetPathname)
-        #};
-        #if ($@)
-        #{
-        #    print "WARNING: Could not mkdir '$TargetPathname': $@\n"
-        #}
+        $SVN->RunSubversion('mkdir', $TargetPathname)
     }
 
     ResetProps($SVN, $TargetPathname, $SourceURL, $RevisionNumber)
@@ -614,7 +607,11 @@ else {print "                  ...ignored...\n"}
 
                 push @ActionArgs, \@DescendantSourcePaths
             }
-            # Ignore localized ancestor modifications ($Change is 'M').
+            else
+            {
+                # Ignore localized ancestor modifications ($Change is 'M').
+                next
+            }
         }
         else
         {
@@ -755,132 +752,11 @@ sub PopRevisionArray
     return pop @$Heap
 }
 
-sub BuildTree
-{
-    my ($Self, $Paths, $PathType) = @_;
-
-    my $Root = {};
-
-    for my $Path (@$Paths)
-    {
-        ref($Root) eq 'HASH' or die "$Self->{MyName}: cannot " .
-            "combine an empty path with other $PathType paths.\n";
-
-        my $NodeRef = \$Root;
-
-        for my $Dir (split('/', $Path))
-        {
-            next unless $Dir;
-
-            ref($$NodeRef) eq 'HASH' or die "$Self->{MyName}: " .
-                "$PathType paths '$Path' and '$$NodeRef' overlap.\n";
-
-            $NodeRef = \(${$NodeRef}->{$Dir} ||= {})
-        }
-
-        if (%$$NodeRef)
-        {
-            die "$Self->{MyName}: $PathType path " .
-                "'$Path' overlaps other path(s).\n"
-        }
-
-        $$NodeRef = $Path
-    }
-
-    return $Root
-}
-
-sub RequireParam
-{
-    my ($Self, $Hash, $ParamName) = @_;
-
-    my $Value = $Hash->{$ParamName};
-    if (!defined $Value || (ref($Value) eq 'ARRAY' && @$Value == 0))
-    {
-        die "$Self->{MyName}: missing required parameter '$ParamName'.\n"
-    }
-
-    return $Value
-}
-
-sub LoadConf
-{
-    my ($Self, $ConfFile) = @_;
-
-    my $Conf = do $ConfFile;
-
-    unless (ref($Conf) eq 'HASH')
-    {
-        die "$Self->{MyName}: $@\n" if $@;
-        die "$Self->{MyName}: $ConfFile\: $!\n" unless defined $Conf;
-        die "$Self->{MyName}: configuration file " .
-            "'$ConfFile' must return a hash\n"
-    }
-
-    $Self->RequireParam($Conf, 'TargetWorkingCopy');
-
-    my $SourceRepositories = $Self->RequireParam($Conf, 'SourceRepositories');
-
-    my @TargetPaths;
-
-    for my $SourceRepoConf (@$SourceRepositories)
-    {
-        $Self->RequireParam($SourceRepoConf, 'RepoName');
-        $Self->RequireParam($SourceRepoConf, 'RootURL');
-
-        my @SourcePaths;
-        my @RepoTargetPaths;
-
-        if ($SourceRepoConf->{TargetPath})
-        {
-            $SourceRepoConf->{PathMapping} = [{SourcePath => '',
-                TargetPath => $SourceRepoConf->{TargetPath},
-                ExclusionList => $SourceRepoConf->{ExclusionList}}]
-        }
-
-        my $PathMapping = $Self->RequireParam($SourceRepoConf, 'PathMapping');
-
-        my $SourcePathToMapping = $SourceRepoConf->{SourcePathToMapping} = {};
-
-        for my $Mapping (@$PathMapping)
-        {
-            my $SourcePath = $Self->RequireParam($Mapping, 'SourcePath');
-            push @SourcePaths, $SourcePath;
-
-            $SourcePathToMapping->{$SourcePath} = $Mapping;
-
-            my $TargetPath = $Self->RequireParam($Mapping, 'TargetPath');
-            push @TargetPaths, $TargetPath;
-            push @RepoTargetPaths, $TargetPath;
-
-            if ($Mapping->{ExclusionList})
-            {
-                $Mapping->{ExclusionTree} =
-                    $Self->BuildTree($Mapping->{ExclusionList}, 'exclusion')
-            }
-        }
-
-        $SourceRepoConf->{SourcePathTree} =
-            $Self->BuildTree(\@SourcePaths, 'source');
-
-        $SourceRepoConf->{TargetPathTree} =
-            $Self->BuildTree(\@RepoTargetPaths, 'target');
-
-        $SourceRepoConf->{TargetPaths} = \@RepoTargetPaths
-    }
-
-    $Conf->{TargetPathTree} = $Self->BuildTree(\@TargetPaths, 'target');
-
-    $Conf->{TargetPaths} = \@TargetPaths;
-
-    return $Conf
-}
-
 sub Run
 {
-    my ($Self, $ConfFile) = @_;
+    my ($Self, $ConfFile, $TargetWorkingCopy) = @_;
 
-    my $Conf = $Self->LoadConf($ConfFile);
+    my $Conf = NCBI::SVN::Replay::Conf->new($ConfFile);
 
     my $SVN = $Self->{SVN};
 
@@ -892,8 +768,8 @@ sub Run
             ['--username', $CommitCredentials]
     }
 
-    chdir $Conf->{TargetWorkingCopy} or
-        die "$Self->{MyName}: could not chdir to $Conf->{TargetWorkingCopy}.\n";
+    chdir $TargetWorkingCopy or
+        die "$Self->{MyName}: could not chdir to $TargetWorkingCopy.\n";
 
     $SVN->RunSubversion(qw(update --ignore-externals));
 
@@ -969,78 +845,6 @@ sub Run
 
     print $LineContinuation . ($ChangesApplied ?
         "$ChangesApplied change(s) applied.\n" : "no relevant changes.\n");
-
-    return 0
-}
-
-sub Init
-{
-    my ($Self, $InitPath, $ConfFile) = @_;
-
-    if (-d $InitPath)
-    {
-        die "$Self->{MyName}: cannot create repository: " .
-            "$InitPath already exists.\n"
-    }
-
-    my $Conf = $Self->LoadConf($ConfFile);
-
-    my $TargetWorkingCopy = $Conf->{TargetWorkingCopy};
-
-    if (-d $TargetWorkingCopy)
-    {
-        die "$Self->{MyName}: error: the workinig copy " .
-            "directory '$TargetWorkingCopy' already exists.\n"
-    }
-
-    my $SVN = $Self->{SVN};
-
-    my $EarliestRevisionTime;
-
-    print "Picking the earliest revision date...\n";
-
-    for my $SourceRepoConf (@{$Conf->{SourceRepositories}})
-    {
-        my $InitialRevisionTime = $SVN->ReadRevProps(0,
-            $SourceRepoConf->{RootURL})->{'svn:date'};
-
-        unless ($EarliestRevisionTime)
-        {
-            $EarliestRevisionTime = $InitialRevisionTime
-        }
-        elsif ($EarliestRevisionTime gt $InitialRevisionTime)
-        {
-            $EarliestRevisionTime = $InitialRevisionTime
-        }
-    }
-
-    die unless $EarliestRevisionTime;
-
-    print "Creating a new repository...\n";
-
-    $SVN->RunOrDie(qw(svnadmin create), $InitPath);
-
-    print "Installing a dummy pre-revprop-change hook script...\n";
-
-    my $HookScript = "$InitPath/hooks/pre-revprop-change";
-
-    open HOOK, '>', $HookScript or die "$HookScript: $!\n";
-    print HOOK "#!/bin/sh\n\nexit 0\n";
-    close HOOK;
-    chmod 0755, $HookScript or die "$HookScript: $!\n";
-
-    require File::Spec;
-
-    my $URL = 'file://' . File::Spec->rel2abs($InitPath);
-
-    print "Setting svn:date...\n";
-
-    $SVN->RunSubversion(qw(propset --revprop -r0 svn:date),
-        $EarliestRevisionTime, $URL);
-
-    print "Checking out revision 0...\n";
-
-    $SVN->RunSubversion('checkout', $URL, $TargetWorkingCopy);
 
     return 0
 }

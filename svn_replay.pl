@@ -37,13 +37,14 @@ BEGIN
 use lib $LibDir;
 
 use NCBI::SVN::Replay;
+use NCBI::SVN::Replay::Init;
 
 use Getopt::Long qw(:config permute no_getopt_compat no_ignore_case);
 
 sub Help
 {
     print <<EOF;
-Usage: $ScriptName [-i REPO_PATH] <config_file>
+Usage: $ScriptName [-i REPO_PATH] <config_file> <target_working_copy>
 NCBI Subversion repository mirroring and restructuring tool.
 
   -i, --init=REPO_PATH          Create a new target repository
@@ -69,18 +70,13 @@ sub UsageError
 # Command line options.
 my ($Help, $InitPath);
 
-GetOptions('help|h|?' => \$Help,
-    'i|init=s' => \$InitPath) or UsageError();
+GetOptions('help|h|?' => \$Help, 'i|init=s' => \$InitPath) or UsageError();
 
-# Configuration file name is the first non-option argument.
-my $ConfFile = shift @ARGV;
-
-unless (defined $ConfFile)
+if (@ARGV != 2)
 {
-    $Help ? Help() : UsageError()
+    $Help ? Help() : UsageError('invalid number of positional arguments.')
 }
 
-my $Instance = NCBI::SVN::Replay->new(MyName => $ScriptName);
+my $Class = $InitPath ? 'NCBI::SVN::Replay::Init' : 'NCBI::SVN::Replay';
 
-exit(!$InitPath ? $Instance->Run($ConfFile) :
-    $Instance->Init($InitPath, $ConfFile))
+exit $Class->new(MyName => $ScriptName)->Run(@ARGV, $InitPath)
