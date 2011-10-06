@@ -1,7 +1,50 @@
-package NCBI::SVN::Replay::Conf;
-
 use strict;
 use warnings;
+
+package NCBI::SVN::Replay::Conf::DirTree;
+
+sub CollectDescendants
+{
+    my ($Node, $Descendants, $Path) = @_;
+
+    while (my ($ChildName, $ChildNode) = each %$Node)
+    {
+        my $ChildPath = $Path ? $Path . '/' . $ChildName : $ChildName;
+
+        if (ref($ChildNode))
+        {
+            CollectDescendants($ChildNode, $Descendants, $ChildPath)
+        }
+        else
+        {
+            push @$Descendants, [$ChildPath, $ChildNode]
+        }
+    }
+}
+
+sub TracePath
+{
+    my ($Tree, $Path, $Descendants) = @_;
+
+    return $Tree unless ref $Tree;
+
+    my $Node = $Tree;
+
+    for my $Dir (split('/', $Path))
+    {
+        next unless $Dir;
+        return $Node unless ref $Node;
+        return undef unless $Node = $Node->{$Dir}
+    }
+
+    return $Node unless ref $Node;
+
+    CollectDescendants($Node, $Descendants) if $Descendants;
+
+    return undef
+}
+
+package NCBI::SVN::Replay::Conf;
 
 my $ConfFile;
 
@@ -36,7 +79,7 @@ sub BuildTree
         $$NodeRef = $Path
     }
 
-    return $Root
+    return bless $Root, 'NCBI::SVN::Replay::Conf::DirTree'
 }
 
 sub RequireParam
@@ -100,11 +143,8 @@ sub new
             push @TargetPaths, $TargetPath;
             push @RepoTargetPaths, $TargetPath;
 
-            if ($Mapping->{ExclusionList})
-            {
-                $Mapping->{ExclusionTree} =
-                    BuildTree($Mapping->{ExclusionList}, 'exclusion')
-            }
+            $Mapping->{ExclusionTree} =
+                BuildTree($Mapping->{ExclusionList} || [], 'exclusion')
         }
 
         $SourceRepoConf->{SourcePathTree} = BuildTree(\@SourcePaths, 'source');

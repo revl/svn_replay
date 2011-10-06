@@ -74,6 +74,11 @@ sub Run
 
     $SVN->RunSubversion('checkout', $URL, $TargetWorkingCopy);
 
+    print "The repository has been created. You may want\n" .
+        "to disable representation sharing by setting\n" .
+        "enable-rep-sharing = false\n" .
+        "in $InitPath/db/fsfs.conf.\n";
+
     return 0
 }
 

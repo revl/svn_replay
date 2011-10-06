@@ -14,9 +14,12 @@ my $OriginalRevPropName = 'ncbi:original-revision';
 
 my $LineContinuation = '  ... ';
 
+# Global variables
+my ($SVN, $TargetRepositoryURL);
+
 sub IsFile
 {
-    my ($SVN, $RevisionNumber, $Path) = @_;
+    my ($RevisionNumber, $Path) = @_;
 
     my ($Info) = values %{$SVN->ReadInfo('-r',
         $RevisionNumber, $Path . '@' . $RevisionNumber)};
@@ -27,27 +30,50 @@ sub IsFile
         0 : die "Unknown node kind '$NodeKind'\n"
 }
 
-sub DownloadFile
+sub Copy
 {
-    my ($SVN, $TargetPathname, $SourceURL, $RevisionNumber) = @_;
+    my ($CopyFromTargetURL, $CopyFromTargetRev, $TargetPathname) = @_;
 
-    my $Contents = $SVN->ReadFile('-r', $RevisionNumber,
-        $SourceURL . '@' . $RevisionNumber);
+    print $LineContinuation .
+        "cp $CopyFromTargetURL\@$CopyFromTargetRev $TargetPathname\n";
 
-    open FILE, '>', $TargetPathname or die "$TargetPathname\: $!\n";
-    syswrite FILE, $Contents;
-    close FILE
+    $SVN->RunSubversion('cp',
+        $CopyFromTargetURL . '@' . $CopyFromTargetRev, $TargetPathname);
+}
+
+sub Export
+{
+    my ($SourceURL, $RevisionNumber, $TargetPathname) = @_;
+
+    print $LineContinuation .
+        "export --force $SourceURL\@$RevisionNumber $TargetPathname\n";
+
+    $SVN->RunSubversion(qw(export --force),
+        $SourceURL . '@' . $RevisionNumber, $TargetPathname)
+}
+
+sub Add
+{
+    my ($TargetPathname) = @_;
+
+    $SVN->RunSubversion(qw(add --no-auto-props -N), $TargetPathname)
+}
+
+sub Delete
+{
+    my ($TargetPathname) = @_;
+
+    $SVN->RunSubversion(qw(rm --force), $TargetPathname)
 }
 
 my $LogChunkSize = 100;
 
-my $TargetRepositoryURL;
-
 sub FindTargetRevBySourceRev
 {
-    my ($SVN, $SourceRevNumber) = @_;
+    my ($SourceRevNumber) = @_;
 
-    my $TargetRevisions = $SVN->ReadLog('--limit', $LogChunkSize, $TargetRepositoryURL);
+    my $TargetRevisions = $SVN->ReadLog('--limit',
+        $LogChunkSize, $TargetRepositoryURL);
 
     for (;;)
     {
@@ -94,36 +120,6 @@ sub FindTargetRevBySourceRev
     }
 }
 
-sub TracePath
-{
-    my ($Tree, $Path, $Descendants) = @_;
-
-    return $Tree unless ref $Tree;
-
-    my $Node = $Tree;
-
-    for my $Dir (split('/', $Path))
-    {
-        next unless $Dir;
-        return $Node unless ref $Node;
-        return undef unless $Node = $Node->{$Dir}
-    }
-
-    return $Node unless ref $Node;
-
-    if ($Descendants)
-    {
-        my @Nodes;
-        do
-        {
-            map {ref() ? push @Nodes, $_ : push @$Descendants, $_} values %$Node
-        }
-        while ($Node = pop @Nodes)
-    }
-
-    return undef
-}
-
 sub CutOffParent
 {
     my ($Pathname, $Parent) = @_;
@@ -134,11 +130,18 @@ sub CutOffParent
     return $Pathname
 }
 
+sub JoinPaths
+{
+    my ($Path1, $Path2) = @_;
+
+    return $Path1 && $Path2 ? $Path1 . '/' . $Path2 : $Path1 . $Path2
+}
+
 my $DiscardSvnExternals;
 
 sub ResetProps
 {
-    my ($SVN, $TargetPathname, $SourceURL, $RevisionNumber) = @_;
+    my ($SourceURL, $RevisionNumber, $TargetPathname) = @_;
 
     my $OldProps = $SVN->ReadPathProps($TargetPathname);
 
@@ -171,122 +174,151 @@ sub ResetProps
 
 sub AddPath
 {
-    my ($Self, $SVN, $TargetPathname, $SourceURL, $RevisionNumber) = @_;
+    my ($TargetPathname, $SourceURL, $RevisionNumber) = @_;
 
-    if (IsFile($SVN, $RevisionNumber, $SourceURL))
+    if (IsFile($RevisionNumber, $SourceURL))
     {
-        DownloadFile($SVN, $TargetPathname, $SourceURL, $RevisionNumber);
+        Export($SourceURL, $RevisionNumber, $TargetPathname);
 
-        $SVN->RunSubversion(qw(add --no-auto-props), $TargetPathname)
+        Add($TargetPathname)
     }
     else
     {
         $SVN->RunSubversion('mkdir', $TargetPathname)
     }
 
-    ResetProps($SVN, $TargetPathname, $SourceURL, $RevisionNumber)
+    ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
 }
 
 sub AddPathByCopying
 {
-    my ($Self, $SVN, $TargetPathname,
-        $SourceURL, $RevisionNumber, $CopyFromTargetURL, $CopyFromSourceRev) = @_;
+    my ($TargetPathname, $SourceURL, $RevisionNumber,
+        $CopyFromTargetURL, $CopyFromTargetRev) = @_;
 
-    my $CopyFromTargetRev = FindTargetRevBySourceRev($SVN, $CopyFromSourceRev);
-    $CopyFromTargetURL .= '@' . $CopyFromTargetRev;
+    Copy($CopyFromTargetURL, $CopyFromTargetRev, $TargetPathname);
 
-    print $LineContinuation .
-        "cp -r $CopyFromTargetRev $CopyFromTargetURL $TargetPathname\n";
+    Export($SourceURL, $RevisionNumber, $TargetPathname);
 
-    $SVN->RunSubversion(qw(cp -r),
-        $CopyFromTargetRev, $CopyFromTargetURL, $TargetPathname)
+    if (-f $TargetPathname)
+    {
+        ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
+    }
+    else
+    {
+        my @PathnamesToResetPropsFor;
+
+        File::Find::find(
+            {
+                wanted => sub
+                {
+                    if (m/\/\.svn$/so)
+                    {
+                        $File::Find::prune = 1;
+
+                        return
+                    }
+
+                    push @PathnamesToResetPropsFor, [JoinPaths($SourceURL,
+                        CutOffParent($File::Find::name, $TargetPathname)),
+                            $File::Find::name]
+                },
+                no_chdir => 1
+            }, $TargetPathname);
+
+        for (@PathnamesToResetPropsFor)
+        {
+            my ($URL, $Pathname) = @$_;
+
+            ResetProps($URL, $RevisionNumber, $Pathname)
+        }
+    }
 }
 
 sub AddPathByCopyImitation
 {
-    my ($Self, $SVN, $TargetPathname,
-        $SourceURL, $RevisionNumber, $Mapping) = @_;
+    my ($TargetPathname, $SourceURL, $RevisionNumber, $Mapping) = @_;
 
-    print "AddPathByCopyImitation($TargetPathname, $SourceURL, $RevisionNumber)\n";
+    print "[add-by-copy-imitation]\n";
 
-    if (IsFile($SVN, $RevisionNumber, $SourceURL))
+    Export($SourceURL, $RevisionNumber, $TargetPathname);
+
+    if (IsFile($RevisionNumber, $SourceURL))
     {
-        DownloadFile($SVN, $TargetPathname, $SourceURL, $RevisionNumber);
+        Add($TargetPathname);
 
-        $SVN->RunSubversion(qw(add --no-auto-props), $TargetPathname);
-
-        ResetProps($SVN, $TargetPathname, $SourceURL, $RevisionNumber)
+        ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
     }
     else
     {
-        print "  ... svn export -r$RevisionNumber $SourceURL\@$RevisionNumber $TargetPathname\n";
+        my $ExclusionTree = $Mapping->{ExclusionTree};
 
-        $SVN->RunSubversion(qw(export -r), $RevisionNumber,
-            $SourceURL . '@' . $RevisionNumber, $TargetPathname);
-
-        my $ExclusionList = $Mapping->{ExclusionList};
-
-        if ($ExclusionList)
-        {
-            my $TargetPath = $Mapping->{TargetPath};
-
-            $TargetPath = $TargetPath ? "./$TargetPath/" : './';
-
-            system(qw(rm -rf), map {$TargetPath . $_} @$ExclusionList)
-        }
-
-        my @PathnamesToAdd;
+        my (@PathnamesToRemove, @PathnamesToAdd);
 
         File::Find::find(
             {
-                wanted => sub {push @PathnamesToAdd, $File::Find::name},
+                wanted => sub
+                {
+                    my $RelativePath =
+                        CutOffParent($File::Find::name, $TargetPathname);
+
+                    if (defined $ExclusionTree->TracePath($RelativePath))
+                    {
+                        $File::Find::prune = 1;
+
+                        push @PathnamesToRemove, $File::Find::name
+                    }
+                    else
+                    {
+                        push @PathnamesToAdd, [$File::Find::name, $RelativePath]
+                    }
+                },
                 no_chdir => 1
             },
             $TargetPathname);
 
-        for my $Pathname (@PathnamesToAdd)
+        for my $Pathname (@PathnamesToRemove)
         {
-            $SVN->RunSubversion(qw(add --no-auto-props -N), $Pathname);
+            print "D         $Pathname (excluded)\n";
 
-            ResetProps($SVN, $Pathname, $SourceURL . '/' .
-                CutOffParent($Pathname, $TargetPathname), $RevisionNumber)
+            system(qw(rm -rf), $Pathname)
+        }
+
+        for (@PathnamesToAdd)
+        {
+            my ($Pathname, $RelativePath) = @$_;
+
+            Add($Pathname);
+
+            ResetProps(JoinPaths($SourceURL, $RelativePath),
+                $RevisionNumber, $Pathname)
         }
     }
 }
 
-sub TraverseReplacementTree
+sub CollectPathnamesToAdd
 {
-    my ($SVN, $Node, $Pathname, $CopyFromTargetURL, $CopyFromTargetRev) = @_;
+    my ($RelativePathnamesToAdd, $Node, $RelativePath) = @_;
 
     if (delete($Node->{'/'}))
     {
-        if (-d $Pathname)
+        while (my ($PathComponent, $SubTree) = each %$Node)
         {
-            ResetProps($SVN, $Pathname, $CopyFromTargetURL, $CopyFromTargetRev);
-
-            my @PathnamesToAdd;
-
-            while (my ($PathComponent, $SubTree) = each %$Node)
-            {
-                push @PathnamesToAdd, TraverseReplacementTree($SVN, $SubTree,
-                    "$Pathname/$PathComponent",
-                        "$CopyFromTargetURL/$PathComponent", $CopyFromTargetRev)
-            }
-
-            return @PathnamesToAdd
-        }
-        else
-        {
-            $SVN->RunSubversion(qw(rm --force), $Pathname)
+            CollectPathnamesToAdd($RelativePathnamesToAdd, $SubTree,
+                "$RelativePath/$PathComponent")
         }
     }
-
-    return ([$Pathname, $CopyFromTargetURL])
+    else
+    {
+        push @$RelativePathnamesToAdd, $RelativePath
+    }
 }
 
 sub ReplaceDirectory
 {
-    my ($SVN, $TargetPath, $CopyFromTargetURL, $CopyFromTargetRev) = @_;
+    my ($TargetPath, $SourceURL, $RevisionNumber,
+        $CopyFromTargetURL, $CopyFromTargetRev) = @_;
+
+    print "R         $TargetPath [in-place]\n";
 
     my $Tree = {'/' => 1};
 
@@ -298,7 +330,7 @@ sub ReplaceDirectory
         $Node = ($Node->{$_} ||= {}) for split('/', $Path)
     }
 
-    my @PathnamesToRemove;
+    my (@PathnamesToResetPropsFor, @PathnamesToRemove, @RelativePathnamesToAdd);
 
     File::Find::find(
         {
@@ -306,56 +338,79 @@ sub ReplaceDirectory
             {
                 if (m/\/\.svn$/so)
                 {
-                    $File::Find::prune = 1
+                    $File::Find::prune = 1;
+
+                    return
+                }
+
+                my $Node = $Tree;
+                my $RelativePath = CutOffParent($File::Find::name, $TargetPath);
+
+                if ($RelativePath)
+                {
+                    my @PathComponents = split('/', $RelativePath);
+
+                    my $LastComponent = pop @PathComponents;
+
+                    $Node = $Node->{$_} for @PathComponents;
+
+                    unless (exists $Node->{$LastComponent})
+                    {
+                        $File::Find::prune = 1;
+
+                        push @PathnamesToRemove, $File::Find::name;
+
+                        return
+                    }
+
+                    $Node = $Node->{$LastComponent}
+                }
+
+                if (-d $File::Find::name)
+                {
+                    $Node->{'/'} = 1;
+
+                    push @PathnamesToResetPropsFor, [JoinPaths($SourceURL,
+                        $RelativePath), $File::Find::name]
                 }
                 else
                 {
-                    my $ExistingPath =
-                        CutOffParent($File::Find::name, $TargetPath);
-                    my $Node = $Tree;
-                    my $Pathname = '';
-                    for my $PathComponent (split('/', $ExistingPath))
-                    {
-                        $Pathname .= '/' if $Pathname;
-                        $Pathname .= $PathComponent;
-                        if (exists $Node->{$PathComponent})
-                        {
-                            ($Node = $Node->{$PathComponent})->{'/'} = 1
-                        }
-                        else
-                        {
-                            $File::Find::prune = 1;
-                            push @PathnamesToRemove, $Pathname
-                        }
-                    }
+                    push @PathnamesToRemove, $File::Find::name
                 }
             },
             no_chdir => 1
         }, $TargetPath);
 
-    for my $Pathname (@PathnamesToRemove)
+    for (@PathnamesToResetPropsFor)
     {
-        $SVN->RunSubversion(qw(rm --force), $Pathname)
+        my ($URL, $Pathname) = @$_;
+
+        ResetProps($URL, $RevisionNumber, $Pathname)
     }
 
-    return TraverseReplacementTree($SVN, $Tree, $TargetPath,
-        $CopyFromTargetURL, $CopyFromTargetRev)
+    for my $Pathname (@PathnamesToRemove)
+    {
+        Delete($Pathname)
+    }
+
+    CollectPathnamesToAdd(\@RelativePathnamesToAdd, $Tree, '');
+
+    return @RelativePathnamesToAdd
 }
 
 sub ReplacePath
 {
-    my ($Self, $SVN, $TargetPathname,
-        $SourceURL, $RevisionNumber) = @_;
+    my ($TargetPathname, $SourceURL, $RevisionNumber) = @_;
 
-    if (IsFile($SVN, $RevisionNumber, $SourceURL))
+    if (IsFile($RevisionNumber, $SourceURL))
     {
-        $SVN->RunSubversion(qw(rm --force), $TargetPathname);
+        Delete($TargetPathname);
 
-        DownloadFile($SVN, $TargetPathname, $SourceURL, $RevisionNumber);
+        Export($SourceURL, $RevisionNumber, $TargetPathname);
 
-        $SVN->RunSubversion(qw(add --no-auto-props), $TargetPathname);
+        Add($TargetPathname);
 
-        ResetProps($SVN, $TargetPathname, $SourceURL, $RevisionNumber)
+        ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
     }
     else
     {
@@ -365,102 +420,115 @@ sub ReplacePath
 
 sub ReplacePathByCopying
 {
-    my ($Self, $SVN, $TargetPathname, $SourceURL, $RevisionNumber,
-        $CopyFromTargetURL, $CopyFromSourceRev) = @_;
+    my ($TargetPathname, $SourceURL, $RevisionNumber,
+        $CopyFromTargetURL, $CopyFromTargetRev) = @_;
 
-    my $CopyFromTargetRev = FindTargetRevBySourceRev($SVN, $CopyFromSourceRev);
+    print "[replace-by-copying]\n";
 
-    if (IsFile($SVN, $RevisionNumber, $SourceURL))
+    if (IsFile($RevisionNumber, $SourceURL))
     {
-        $SVN->RunSubversion(qw(rm --force), $TargetPathname);
+        Delete($TargetPathname);
 
-        $CopyFromTargetURL .= '@' . $CopyFromTargetRev;
+        Copy($CopyFromTargetURL, $CopyFromTargetRev, $TargetPathname);
 
-        print $LineContinuation .
-            "cp -r $CopyFromTargetRev $CopyFromTargetURL $TargetPathname\n";
+        Export($SourceURL, $RevisionNumber, $TargetPathname);
 
-        $SVN->RunSubversion(qw(cp -r),
-            $CopyFromTargetRev, $CopyFromTargetURL, $TargetPathname)
+        ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
     }
     else
     {
-        for (ReplaceDirectory($SVN, $TargetPathname,
-            $CopyFromTargetURL, $CopyFromTargetRev))
+        for my $RelativePath (ReplaceDirectory($TargetPathname, $SourceURL,
+            $RevisionNumber, $CopyFromTargetURL, $CopyFromTargetRev))
         {
-            my ($Pathname, $URL) = @$_;
-
-            $URL .= '@' . $CopyFromTargetRev;
-
-            print $LineContinuation .
-                "cp -r $CopyFromTargetRev $URL $Pathname\n";
-
-            $SVN->RunSubversion(qw(cp -r), $CopyFromTargetRev, $URL, $Pathname)
+            AddPathByCopying($TargetPathname . $RelativePath,
+                $SourceURL . $RelativePath, $RevisionNumber,
+                    $CopyFromTargetURL . $RelativePath, $CopyFromTargetRev)
         }
     }
 }
 
 sub ReplacePathByCopyImitation
 {
-    my ($Self, $SVN, $TargetPathname,
-        $SourceURL, $RevisionNumber, $Mapping) = @_;
+    my ($TargetPathname, $SourceURL, $RevisionNumber, $Mapping) = @_;
 
-    if (IsFile($SVN, $RevisionNumber, $SourceURL))
+    print "[replace-by-copy-imitation]\n";
+
+    if (IsFile($RevisionNumber, $SourceURL))
     {
-        $SVN->RunSubversion(qw(rm --force), $TargetPathname);
+        Delete($TargetPathname);
 
-        DownloadFile($SVN, $TargetPathname, $SourceURL, $RevisionNumber);
+        Export($SourceURL, $RevisionNumber, $TargetPathname);
 
-        $SVN->RunSubversion(qw(add --no-auto-props), $TargetPathname);
+        Add($TargetPathname);
 
-        ResetProps($SVN, $TargetPathname, $SourceURL, $RevisionNumber)
+        ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
     }
     else
     {
-        for (ReplaceDirectory($SVN, $TargetPathname,
-            $SourceURL, $RevisionNumber))
+        for my $RelativePath (ReplaceDirectory($TargetPathname, $SourceURL,
+            $RevisionNumber, $SourceURL, $RevisionNumber))
         {
-            my ($Pathname, $URL) = @$_;
-
-            $Self->AddPathByCopyImitation($SVN, $Pathname,
-                $URL, $RevisionNumber, $Mapping)
+            AddPathByCopyImitation($TargetPathname . $RelativePath,
+                $SourceURL . $RelativePath, $RevisionNumber, $Mapping)
         }
     }
 }
 
-sub ModifyPath
+sub CreateMissingParentDirs
 {
-    my ($Self, $SVN, $TargetPathname, $SourceURL, $RevisionNumber) = @_;
+    my ($TargetPathname) = @_;
 
-    if (IsFile($SVN, $RevisionNumber, $SourceURL))
+    my ($ParentDir) = $TargetPathname =~ m/(.*)\//so;
+
+    if ($ParentDir && !-d $ParentDir)
     {
-        DownloadFile($SVN, $TargetPathname, $SourceURL, $RevisionNumber)
-    }
+        print "Creating missing parent directory $ParentDir...\n";
 
-    ResetProps($SVN, $TargetPathname, $SourceURL, $RevisionNumber)
+        $SVN->RunSubversion(qw(mkdir --parents), $ParentDir)
+    }
 }
 
-sub DeletePath
+sub BeginWorkingCopyChange
 {
-    my ($Self, $SVN, $TargetPathname) = @_;
+    my ($Revision) = @_;
 
-    $SVN->RunSubversion('rm', $TargetPathname)
+    my $SourceRepoConf = $Revision->{SourceRepoConf};
+
+    unless ($Revision->{HasChangedWorkingCopy})
+    {
+        $Revision->{HasChangedWorkingCopy} = 1;
+
+        print '-' x 80 . "\nApplying revision $Revision->{Number} of '" .
+            $SourceRepoConf->{RepoName} . "'...\n";
+
+        $SVN->RunSubversion(qw(update --ignore-externals));
+
+        # Check for uncommitted changes...
+        my @LocalChanges = grep(!m/^X/o, $SVN->ReadSubversionLines(
+            qw(status --ignore-externals)));
+
+        if (@LocalChanges)
+        {
+            local $" = "\n  ";
+            die "Error: uncommitted changes detected:\n  @LocalChanges\n"
+        }
+
+        $DiscardSvnExternals = $SourceRepoConf->{DiscardSvnExternals}
+    }
 }
 
 sub ApplyRevisionChanges
 {
-    my ($Self, $SVN, $Revision) = @_;
+    my ($Self, $Revision) = @_;
 
     my ($SourceRepoConf, $RevisionNumber) =
         @$Revision{qw(SourceRepoConf Number)};
 
     my ($RootURL, $SourcePathTree, $SourcePathToMapping) =
         @$SourceRepoConf{qw(RootURL SourcePathTree SourcePathToMapping)};
-#use Data::Dumper; print Dumper($SourcePathTree);
-    my $Changed = 0;
 
-print "--- $Revision->{Number}\n";
-    # Sort changes by the change type (Add first, then Delete)
-    # sort {$a->[0] cmp $b->[0]}
+    $Revision->{HasChangedWorkingCopy} = 0;
+
     for (@{$Revision->{ChangedPaths}})
     {
         my ($Change, $ChangedSourcePath, $CopyFromSourcePath, $CopyFromSourceRev) = @$_;
@@ -474,193 +542,187 @@ print "--- $Revision->{Number}\n";
         $ChangedSourcePath =~ s/^\/+//so;
 
         my @DescendantSourcePaths;
-        my $AncestorSourcePath = TracePath($SourcePathTree, $ChangedSourcePath, \@DescendantSourcePaths);
 
-        my $Action;
-        my @ActionArgs = ($SVN);
+        my $SourcePathAncestor = $SourcePathTree->TracePath(
+            $ChangedSourcePath, \@DescendantSourcePaths);
 
-        my @RequireParentsFor;
-
-        if (defined($AncestorSourcePath))
+        # The changed path must be either a descendant or an ancestor
+        # of a source path. Otherwise, it will be skipped.
+        if (defined $SourcePathAncestor)
         {
-            my $Mapping = $SourcePathToMapping->{$AncestorSourcePath};
+            my $Mapping = $SourcePathToMapping->{$SourcePathAncestor};
 
-            my $RelativePath = CutOffParent($ChangedSourcePath, $AncestorSourcePath);
+            my $RelativePath =
+                CutOffParent($ChangedSourcePath, $SourcePathAncestor);
 
-print " $Change $ChangedSourcePath  : Descendant of '$AncestorSourcePath'\n";
-            #next if defined($PathIsExcluded);
-if (defined(TracePath($Mapping->{ExclusionTree}, $RelativePath))) {print "PATH $ChangedSourcePath ($RelativePath) IS EXCLUDED\n"; next}
+            next if defined $Mapping->{ExclusionTree}->TracePath($RelativePath);
 
-            my $TargetPathname = $Mapping->{TargetPath};
-            $TargetPathname .= '/' . $RelativePath if $RelativePath;
+            BeginWorkingCopyChange($Revision);
 
-            push @ActionArgs, $TargetPathname;
+            my $TargetPathname =
+                JoinPaths($Mapping->{TargetPath}, $RelativePath);
 
-            push @RequireParentsFor, $TargetPathname;
+            CreateMissingParentDirs($TargetPathname);
+
+            my $SourceURL = JoinPaths($RootURL, $ChangedSourcePath);
 
             if ($Change eq 'D')
             {
-                $Action = 'DeletePath'
+                Delete($TargetPathname)
             }
-            else
+            elsif ($Change eq 'M')
             {
-                push @ActionArgs, "$RootURL/$ChangedSourcePath", $RevisionNumber;
-
-                if ($Change eq 'M')
+                if (IsFile($RevisionNumber, $SourceURL))
                 {
-                    $Action = 'ModifyPath'
+                    print "M         $TargetPathname\n";
+
+                    Export($SourceURL, $RevisionNumber, $TargetPathname)
                 }
-                else # $Change is either 'A' or 'R'.
+
+                ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
+            }
+            else # $Change is either 'A' or 'R'.
+            {
+                # Methods AddPath() and ReplacePath()
+                my $Action = $Change eq 'A' ? 'AddPath' : 'ReplacePath';
+                my @Args = ($TargetPathname, $SourceURL, $RevisionNumber);
+
+                if ($CopyFromSourcePath)
                 {
-                    $Action = $Change eq 'A' ? 'AddPath' : 'ReplacePath';
+                    $CopyFromSourcePath =~ s/^\/+//so;
 
-                    if ($CopyFromSourcePath)
+                    my ($CopyFromSourcePathAncestor,
+                        $CopyMapping, $CopyRelativePath);
+
+                    if (defined($CopyFromSourcePathAncestor =
+                        $SourcePathTree->TracePath($CopyFromSourcePath)) and
+                        $CopyMapping = $SourcePathToMapping->{
+                            $CopyFromSourcePathAncestor} and
+                        !defined($CopyMapping->{ExclusionTree}->TracePath(
+                            $CopyRelativePath =
+                                CutOffParent($CopyFromSourcePath,
+                                    $CopyFromSourcePathAncestor))))
                     {
-                        $CopyFromSourcePath =~ s/^\/+//so;
-
-                        my ($CopyFromSourcePathIsDescendantOf,
-                            $CopyMapping, $CopyRelativePath);
-
-                        # Check if $CopyFromSourcePath is excluded.
-                        if (defined($CopyFromSourcePathIsDescendantOf =
-                            TracePath($SourcePathTree, $CopyFromSourcePath)) and
-                            $CopyMapping =
-                                $SourcePathToMapping->{$CopyFromSourcePathIsDescendantOf} and
-                            !defined(TracePath($CopyMapping->{ExclusionTree},
-                                $CopyRelativePath =
-                                    CutOffParent($CopyFromSourcePath,
-                                        $CopyFromSourcePathIsDescendantOf))))
-                        {
-                            my $CopyFromTargetURL = $TargetRepositoryURL;
-                            $CopyFromTargetURL .= '/' . $CopyMapping->{TargetPath}
-                                if $CopyMapping->{TargetPath};
-                            $CopyFromTargetURL .= '/' . $CopyRelativePath
-                                if $CopyRelativePath;
-
-                            $Action .= 'ByCopying';
-
-                            push @ActionArgs, $CopyFromTargetURL, $CopyFromSourceRev
-                        }
-                        else
-                        {
-                            $Action .= 'ByCopyImitation';
-
-                            push @ActionArgs, $Mapping
-                        }
+                        # Methods AddPathByCopying() and ReplacePathByCopying()
+                        $Action .= 'ByCopying';
+                        push @Args, JoinPaths($TargetRepositoryURL,
+                                JoinPaths($CopyMapping->{TargetPath}, $CopyRelativePath)),
+                            FindTargetRevBySourceRev($CopyFromSourceRev)
+                    }
+                    else
+                    {
+                        # Methods AddPathByCopyImitation() and
+                        # ReplacePathByCopyImitation()
+                        $Action .= 'ByCopyImitation';
+                        push @Args, $Mapping
                     }
                 }
+
+                $Self->can($Action)->(@Args)
             }
         }
         elsif (@DescendantSourcePaths)
         {
-            if ($Change eq 'A' or $Change eq 'R')
+            if ($Change eq 'M')
             {
-                my (@ImplicitlyAddedPaths, @ImplicitlyDeletedPaths);
-
-                for my $ImplicitlyChangedPath (@DescendantSourcePaths)
-                {
-                    eval
-                    {
-                        $SVN->ReadInfo($RootURL .
-                            "/$ImplicitlyChangedPath\@$RevisionNumber")
-                    };
-                    unless ($@)
-                    {
-                        push @ImplicitlyAddedPaths, $ImplicitlyChangedPath
-                    }
-                    elsif ($Change eq 'R')
-                    {
-                        push @ImplicitlyDeletedPaths, $ImplicitlyChangedPath
-                    }
-                }
-print " $Change $ChangedSourcePath  : Ancestor of '@DescendantSourcePaths'\n";
-print "   actually changed '".join("', '",@ImplicitlyAddedPaths)."'\n" if @ImplicitlyAddedPaths;
-
-                if (@ImplicitlyAddedPaths || @ImplicitlyDeletedPaths)
-                {
-                    push @ActionArgs, \@ImplicitlyAddedPaths;
-                    push @RequireParentsFor, \@ImplicitlyAddedPaths;
-
-                    if ($Change eq 'A')
-                    {
-                        $Action = 'AddPathPerAncestorAddition'
-                    }
-                    else # $Change is 'R'.
-                    {
-                        $Action = 'ReplacePathPerAncestorReplacement';
-
-                        push @ActionArgs, \@ImplicitlyDeletedPaths
-                    }
-
-                    if ($CopyFromSourcePath)
-                    {
-                        $Action .= 'ByCopying';
-
-                        push @ActionArgs, $CopyFromSourcePath, $CopyFromSourceRev
-                    }
-                }
-else {print "                  ...ignored...\n"}
+                # Ignore localized ancestor modifications.
+                next
             }
             elsif ($Change eq 'D')
             {
-                $Action = 'DeletePathPerAncestorDeletion';
+                BeginWorkingCopyChange($Revision);
 
-                push @ActionArgs, \@DescendantSourcePaths
+                for my $SourcePath (map {$_->[1]} @DescendantSourcePaths)
+                {
+                    my $TargetPathname =
+                        $SourcePathToMapping->{$SourcePath}->{TargetPath};
+
+                    Delete($TargetPathname) if -e $TargetPathname
+                }
             }
-            else
+            else # $Change is either 'A' or 'R'.
             {
-                # Ignore localized ancestor modifications ($Change is 'M').
-                next
+                # Ignore modifications that are not copies.
+                next unless $CopyFromSourcePath;
+
+                BeginWorkingCopyChange($Revision);
+
+                $CopyFromSourcePath =~ s/^\/+//so;
+
+                my $CopyFromTargetRev =
+                    FindTargetRevBySourceRev($CopyFromSourceRev);
+
+                for (@DescendantSourcePaths)
+                {
+                    my ($RelativePath, $SourcePath) = @$_;
+
+                    my $Mapping = $SourcePathToMapping->{$SourcePath};
+
+                    my $TargetPathname = $Mapping->{TargetPath};
+
+                    my $SourceURL = JoinPaths($RootURL, $SourcePath);
+
+                    eval
+                    {
+                        $SVN->ReadInfo("$SourceURL\@$RevisionNumber")
+                    };
+                    if ($@)
+                    {
+                        Delete($TargetPathname) if -e $TargetPathname
+                    }
+                    else
+                    {
+                        my $Action;
+                        my @Args = ($TargetPathname, $SourceURL, $RevisionNumber);
+
+                        unless (-e $TargetPathname)
+                        {
+                            CreateMissingParentDirs($TargetPathname);
+
+                            $Action = 'AddPath'
+                        }
+                        else
+                        {
+                            $Action = 'ReplacePath'
+                        }
+
+                        my $LocalCopyFromSourcePath =
+                            JoinPaths($CopyFromSourcePath, $RelativePath);
+
+                        my ($CopyFromSourcePathAncestor,
+                            $CopyMapping, $CopyRelativePath) = @_;
+
+                        if (defined($CopyFromSourcePathAncestor =
+                            $SourcePathTree->TracePath($LocalCopyFromSourcePath)) and
+                            $CopyMapping = $SourcePathToMapping->{
+                                $CopyFromSourcePathAncestor} and
+                            !defined $CopyMapping->{ExclusionTree}->TracePath(
+                            $CopyRelativePath = CutOffParent(
+                                $LocalCopyFromSourcePath,
+                                    $CopyFromSourcePathAncestor)))
+                        {
+                            # Methods AddPathByCopying() and ReplacePathByCopying()
+                            $Action .= 'ByCopying';
+                            push @Args, JoinPaths($TargetRepositoryURL,
+                                JoinPaths($TargetPathname, $CopyRelativePath)),
+                                $CopyFromTargetRev
+                        }
+                        else
+                        {
+                            # Methods AddPathByCopyImitation() and
+                            # ReplacePathByCopyImitation()
+                            $Action .= 'ByCopyImitation';
+                            push @Args, $Mapping
+                        }
+
+                        $Self->can($Action)->(@Args)
+                    }
+                }
             }
         }
-        else
-        {
-            # The changed path is neither a descendant nor an
-            # ancestor of any of the source paths, skip it.
-            next
-        }
-
-        next unless $Action;
-
-        unless ($Changed)
-        {
-            $Changed = 1;
-
-            print '-' x 80 . "\nApplying revision $RevisionNumber of '" .
-                $SourceRepoConf->{RepoName} . "'...\n";
-
-            $SVN->RunSubversion(qw(update --ignore-externals));
-
-            print "Checking for uncommitted changes...\n";
-
-            my @LocalChanges = grep(!m/^X/o, $SVN->ReadSubversionLines(
-                qw(status --ignore-externals)));
-
-            if (@LocalChanges)
-            {
-                local $" = "\n  ";
-                die "Error: uncommitted changes detected:\n  @LocalChanges\n"
-            }
-
-            $DiscardSvnExternals = $SourceRepoConf->{DiscardSvnExternals}
-        }
-
-        for (@RequireParentsFor)
-        {
-            my ($ParentDir) = m/(.*)\//so;
-
-            if ($ParentDir && !-d $ParentDir)
-            {
-                print "Creating missing parent directory $ParentDir...\n";
-                $SVN->RunSubversion(qw(mkdir --parents), $ParentDir)
-            }
-        }
-
-print "[$Action]\n";
-        $Self->$Action(@ActionArgs)
     }
 
-    if ($Changed)
+    if ($Revision->{HasChangedWorkingCopy})
     {
         if (grep(m/^\?/o, $SVN->ReadSubversionLines(qw(status --ignore-externals))))
         {
@@ -699,7 +761,7 @@ print "[$Action]\n";
         }
     }
 
-    return $Changed
+    return $Revision->{HasChangedWorkingCopy}
 }
 
 sub IsNewer
@@ -758,7 +820,7 @@ sub Run
 
     my $Conf = NCBI::SVN::Replay::Conf->new($ConfFile);
 
-    my $SVN = $Self->{SVN};
+    $SVN = $Self->{SVN};
 
     if ($CommitCredentials = $Conf->{CommitCredentials})
     {
@@ -838,7 +900,7 @@ sub Run
 
     while (my $Revisions = PopRevisionArray(\@RevisionArrayHeap))
     {
-        $ChangesApplied += $Self->ApplyRevisionChanges($SVN, shift @$Revisions);
+        $ChangesApplied += $Self->ApplyRevisionChanges(shift @$Revisions);
 
         PushRevisionArray(\@RevisionArrayHeap, $Revisions) if @$Revisions
     }
