@@ -46,9 +46,9 @@ sub Export
     my ($SourceURL, $RevisionNumber, $TargetPathname) = @_;
 
     print $LineContinuation .
-        "export --force $SourceURL\@$RevisionNumber $TargetPathname\n";
+        "export --force -q $SourceURL\@$RevisionNumber $TargetPathname\n";
 
-    $SVN->RunSubversion(qw(export --force),
+    $SVN->RunSubversion(qw(export --force -q),
         $SourceURL . '@' . $RevisionNumber, $TargetPathname)
 }
 
@@ -193,20 +193,16 @@ sub AddPath
 sub AddPathByCopying
 {
     my ($TargetPathname, $SourceURL, $RevisionNumber,
-        $CopyFromTargetURL, $CopyFromTargetRev) = @_;
+        $CopyFromTargetURL, $CopyFromTargetRev, $PathnamesToUpdate) = @_;
 
     Copy($CopyFromTargetURL, $CopyFromTargetRev, $TargetPathname);
 
-    Export($SourceURL, $RevisionNumber, $TargetPathname);
-
     if (-f $TargetPathname)
     {
-        ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
+        $PathnamesToUpdate->{$TargetPathname} = $SourceURL
     }
     else
     {
-        my @PathnamesToResetPropsFor;
-
         File::Find::find(
             {
                 wanted => sub
@@ -218,38 +214,35 @@ sub AddPathByCopying
                         return
                     }
 
-                    push @PathnamesToResetPropsFor, [JoinPaths($SourceURL,
-                        CutOffParent($File::Find::name, $TargetPathname)),
-                            $File::Find::name]
+                    $PathnamesToUpdate->{$File::Find::name} =
+                        JoinPaths($SourceURL,
+                            CutOffParent($File::Find::name, $TargetPathname))
                 },
                 no_chdir => 1
-            }, $TargetPathname);
-
-        for (@PathnamesToResetPropsFor)
-        {
-            my ($URL, $Pathname) = @$_;
-
-            ResetProps($URL, $RevisionNumber, $Pathname)
-        }
+            }, $TargetPathname)
     }
 }
 
 sub AddPathByCopyImitation
 {
-    my ($TargetPathname, $SourceURL, $RevisionNumber, $Mapping) = @_;
+    my ($TargetPathname, $SourceURL, $RevisionNumber,
+        $CopyFromSourceURL, $CopyFromSourceRev,
+        $Mapping, $PathnamesToUpdate) = @_;
 
     print "[add-by-copy-imitation]\n";
 
-    Export($SourceURL, $RevisionNumber, $TargetPathname);
-
     if (IsFile($RevisionNumber, $SourceURL))
     {
+        Export($SourceURL, $RevisionNumber, $TargetPathname);
+
         Add($TargetPathname);
 
         ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
     }
     else
     {
+        Export($CopyFromSourceURL, $CopyFromSourceRev, $TargetPathname);
+
         my $ExclusionTree = $Mapping->{ExclusionTree};
 
         my (@PathnamesToRemove, @PathnamesToAdd);
@@ -289,8 +282,8 @@ sub AddPathByCopyImitation
 
             Add($Pathname);
 
-            ResetProps(JoinPaths($SourceURL, $RelativePath),
-                $RevisionNumber, $Pathname)
+            $PathnamesToUpdate->{$Pathname} =
+                JoinPaths($SourceURL, $RelativePath)
         }
     }
 }
@@ -316,21 +309,21 @@ sub CollectPathnamesToAdd
 sub ReplaceDirectory
 {
     my ($TargetPath, $SourceURL, $RevisionNumber,
-        $CopyFromTargetURL, $CopyFromTargetRev) = @_;
+        $CopyFromURL, $CopyFromRev, $PathnamesToUpdate) = @_;
 
     print "R         $TargetPath [in-place]\n";
 
     my $Tree = {'/' => 1};
 
-    for my $Path ($SVN->ReadSubversionLines(qw(ls -R -r), $CopyFromTargetRev,
-        $CopyFromTargetURL . '@' . $CopyFromTargetRev))
+    for my $Path ($SVN->ReadSubversionLines(qw(ls -R -r), $CopyFromRev,
+        $CopyFromURL . '@' . $CopyFromRev))
     {
         my $Node = $Tree;
 
         $Node = ($Node->{$_} ||= {}) for split('/', $Path)
     }
 
-    my (@PathnamesToResetPropsFor, @PathnamesToRemove, @RelativePathnamesToAdd);
+    my (@PathnamesToRemove, @RelativePathnamesToAdd);
 
     File::Find::find(
         {
@@ -370,8 +363,8 @@ sub ReplaceDirectory
                 {
                     $Node->{'/'} = 1;
 
-                    push @PathnamesToResetPropsFor, [JoinPaths($SourceURL,
-                        $RelativePath), $File::Find::name]
+                    $PathnamesToUpdate->{$File::Find::name} =
+                        JoinPaths($SourceURL, $RelativePath)
                 }
                 else
                 {
@@ -381,15 +374,10 @@ sub ReplaceDirectory
             no_chdir => 1
         }, $TargetPath);
 
-    for (@PathnamesToResetPropsFor)
-    {
-        my ($URL, $Pathname) = @$_;
-
-        ResetProps($URL, $RevisionNumber, $Pathname)
-    }
-
     for my $Pathname (@PathnamesToRemove)
     {
+        delete $PathnamesToUpdate->{$Pathname};
+
         Delete($Pathname)
     }
 
@@ -421,7 +409,7 @@ sub ReplacePath
 sub ReplacePathByCopying
 {
     my ($TargetPathname, $SourceURL, $RevisionNumber,
-        $CopyFromTargetURL, $CopyFromTargetRev) = @_;
+        $CopyFromTargetURL, $CopyFromTargetRev, $PathnamesToUpdate) = @_;
 
     print "[replace-by-copying]\n";
 
@@ -431,25 +419,28 @@ sub ReplacePathByCopying
 
         Copy($CopyFromTargetURL, $CopyFromTargetRev, $TargetPathname);
 
-        Export($SourceURL, $RevisionNumber, $TargetPathname);
-
-        ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
+        $PathnamesToUpdate->{$TargetPathname} = $SourceURL
     }
     else
     {
-        for my $RelativePath (ReplaceDirectory($TargetPathname, $SourceURL,
-            $RevisionNumber, $CopyFromTargetURL, $CopyFromTargetRev))
+        for my $RelativePath (ReplaceDirectory($TargetPathname,
+            $SourceURL, $RevisionNumber,
+            $CopyFromTargetURL, $CopyFromTargetRev,
+            $PathnamesToUpdate))
         {
             AddPathByCopying($TargetPathname . $RelativePath,
                 $SourceURL . $RelativePath, $RevisionNumber,
-                    $CopyFromTargetURL . $RelativePath, $CopyFromTargetRev)
+                $CopyFromTargetURL . $RelativePath, $CopyFromTargetRev,
+                $PathnamesToUpdate)
         }
     }
 }
 
 sub ReplacePathByCopyImitation
 {
-    my ($TargetPathname, $SourceURL, $RevisionNumber, $Mapping) = @_;
+    my ($TargetPathname, $SourceURL, $RevisionNumber,
+        $CopyFromSourceURL, $CopyFromSourceRev,
+        $Mapping, $PathnamesToUpdate) = @_;
 
     print "[replace-by-copy-imitation]\n";
 
@@ -465,11 +456,15 @@ sub ReplacePathByCopyImitation
     }
     else
     {
-        for my $RelativePath (ReplaceDirectory($TargetPathname, $SourceURL,
-            $RevisionNumber, $SourceURL, $RevisionNumber))
+        for my $RelativePath (ReplaceDirectory($TargetPathname,
+            $SourceURL, $RevisionNumber,
+            $CopyFromSourceURL, $CopyFromSourceRev,
+            $PathnamesToUpdate))
         {
             AddPathByCopyImitation($TargetPathname . $RelativePath,
-                $SourceURL . $RelativePath, $RevisionNumber, $Mapping)
+                $SourceURL . $RelativePath, $RevisionNumber,
+                $CopyFromSourceURL . $RelativePath, $CopyFromSourceRev,
+                $Mapping, $PathnamesToUpdate)
         }
     }
 }
@@ -529,6 +524,8 @@ sub ApplyRevisionChanges
 
     $Revision->{HasChangedWorkingCopy} = 0;
 
+    my %PathnamesToUpdate;
+
     for (@{$Revision->{ChangedPaths}})
     {
         my ($Change, $ChangedSourcePath, $CopyFromSourcePath, $CopyFromSourceRev) = @$_;
@@ -568,6 +565,8 @@ sub ApplyRevisionChanges
 
             if ($Change eq 'D')
             {
+                delete $PathnamesToUpdate{$TargetPathname};
+
                 Delete($TargetPathname)
             }
             elsif ($Change eq 'M')
@@ -614,8 +613,11 @@ sub ApplyRevisionChanges
                         # Methods AddPathByCopyImitation() and
                         # ReplacePathByCopyImitation()
                         $Action .= 'ByCopyImitation';
-                        push @Args, $Mapping
+                        push @Args, JoinPaths($RootURL, $CopyFromSourcePath),
+                            $CopyFromSourceRev, $Mapping
                     }
+
+                    push @Args, \%PathnamesToUpdate
                 }
 
                 $Self->can($Action)->(@Args)
@@ -637,7 +639,12 @@ sub ApplyRevisionChanges
                     my $TargetPathname =
                         $SourcePathToMapping->{$SourcePath}->{TargetPath};
 
-                    Delete($TargetPathname) if -e $TargetPathname
+                    if (-e $TargetPathname)
+                    {
+                        delete $PathnamesToUpdate{$TargetPathname};
+
+                        Delete($TargetPathname)
+                    }
                 }
             }
             else # $Change is either 'A' or 'R'.
@@ -668,7 +675,12 @@ sub ApplyRevisionChanges
                     };
                     if ($@)
                     {
-                        Delete($TargetPathname) if -e $TargetPathname
+                        if (-e $TargetPathname)
+                        {
+                            delete $PathnamesToUpdate{$TargetPathname};
+
+                            Delete($TargetPathname)
+                        }
                     }
                     else
                     {
@@ -712,13 +724,29 @@ sub ApplyRevisionChanges
                             # Methods AddPathByCopyImitation() and
                             # ReplacePathByCopyImitation()
                             $Action .= 'ByCopyImitation';
-                            push @Args, $Mapping
+                            push @Args,
+                                JoinPaths($RootURL, $LocalCopyFromSourcePath),
+                                $CopyFromSourceRev, $Mapping
                         }
+
+                        push @Args, \%PathnamesToUpdate;
 
                         $Self->can($Action)->(@Args)
                     }
                 }
             }
+        }
+    }
+
+    for my $Pathname (keys %PathnamesToUpdate)
+    {
+        if (-e $Pathname)
+        {
+            my $SourceURL = $PathnamesToUpdate{$Pathname};
+
+            Export($SourceURL, $RevisionNumber, $Pathname) if -f $Pathname;
+
+            ResetProps($SourceURL, $RevisionNumber, $Pathname)
         }
     }
 
