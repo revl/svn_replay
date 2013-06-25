@@ -45,11 +45,13 @@ sub Export
 {
     my ($SourceURL, $RevisionNumber, $TargetPathname) = @_;
 
-    print $LineContinuation .
-        "export --force -q $SourceURL\@$RevisionNumber $TargetPathname\n";
+    $SourceURL .= '@' . $RevisionNumber;
 
-    $SVN->RunSubversion(qw(export --force -q),
-        $SourceURL . '@' . $RevisionNumber, $TargetPathname)
+    print $LineContinuation . 'export --ignore-externals --force -q ' .
+        "$SourceURL $TargetPathname\n";
+
+    $SVN->RunSubversion(qw(export --ignore-externals --force -q),
+        $SourceURL, $TargetPathname)
 }
 
 sub Add
