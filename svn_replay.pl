@@ -80,3 +80,5 @@ if (@ARGV != 2)
 my $Class = $InitPath ? 'NCBI::SVN::Replay::Init' : 'NCBI::SVN::Replay';
 
 exit $Class->new(MyName => $ScriptName)->Run(@ARGV, $InitPath)
+
+# vim: syntax=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab

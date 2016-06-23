@@ -163,3 +163,5 @@ sub new
 }
 
 1
+
+# vim: syntax=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab
