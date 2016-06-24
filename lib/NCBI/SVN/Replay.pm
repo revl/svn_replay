@@ -718,7 +718,7 @@ sub ApplyRevisionChanges
                             # Methods AddPathByCopying() and ReplacePathByCopying()
                             $Action .= 'ByCopying';
                             push @Args, JoinPaths($TargetRepositoryURL,
-                                JoinPaths($TargetPathname, $CopyRelativePath)),
+                                JoinPaths($CopyMapping->{TargetPath}, $CopyRelativePath)),
                                 $CopyFromTargetRev
                         }
                         else
