@@ -52,13 +52,14 @@ sub IsFile
 
 sub Copy
 {
-    my ($CopyFromTargetURL, $CopyFromTargetRev, $TargetPathname) = @_;
+    my ($CopyFromURLInTargetRepo, $CopyFromRevInTargetRepo,
+        $TargetPathname) = @_;
 
-    print $LineContinuation .
-        "cp $CopyFromTargetURL\@$CopyFromTargetRev $TargetPathname\n";
+    my $URLAndRev = $CopyFromURLInTargetRepo . '@' . $CopyFromRevInTargetRepo;
 
-    $SVN->RunSubversion('cp',
-        $CopyFromTargetURL . '@' . $CopyFromTargetRev, $TargetPathname);
+    print $LineContinuation . "cp $URLAndRev $TargetPathname\n";
+
+    $SVN->RunSubversion('cp', $URLAndRev, $TargetPathname);
 }
 
 sub Export
@@ -215,9 +216,9 @@ sub AddPath
 sub AddPathByCopying
 {
     my ($TargetPathname, $SourceURL, $RevisionNumber,
-        $CopyFromTargetURL, $CopyFromTargetRev, $PathnamesToUpdate) = @_;
+        $CopyFromURLInTargetRepo, $CopyFromRevInTargetRepo, $PathnamesToUpdate) = @_;
 
-    Copy($CopyFromTargetURL, $CopyFromTargetRev, $TargetPathname);
+    Copy($CopyFromURLInTargetRepo, $CopyFromRevInTargetRepo, $TargetPathname);
 
     if (-f $TargetPathname)
     {
@@ -248,7 +249,7 @@ sub AddPathByCopying
 sub AddPathByCopyImitation
 {
     my ($TargetPathname, $SourceURL, $RevisionNumber,
-        $CopyFromSourceURL, $CopyFromSourceRev,
+        $CopyFromURLInSourceRepo, $CopyFromRevInSourceRepo,
         $Mapping, $PathnamesToUpdate) = @_;
 
     print "[add-by-copy-imitation]\n";
@@ -263,7 +264,7 @@ sub AddPathByCopyImitation
     }
     else
     {
-        Export($CopyFromSourceURL, $CopyFromSourceRev, $TargetPathname);
+        Export($CopyFromURLInSourceRepo, $CopyFromRevInSourceRepo, $TargetPathname);
 
         my $ExclusionTree = $Mapping->{ExclusionTree};
 
@@ -431,7 +432,7 @@ sub ReplacePath
 sub ReplacePathByCopying
 {
     my ($TargetPathname, $SourceURL, $RevisionNumber,
-        $CopyFromTargetURL, $CopyFromTargetRev, $PathnamesToUpdate) = @_;
+        $CopyFromURLInTargetRepo, $CopyFromRevInTargetRepo, $PathnamesToUpdate) = @_;
 
     print "[replace-by-copying]\n";
 
@@ -439,7 +440,7 @@ sub ReplacePathByCopying
     {
         Delete($TargetPathname);
 
-        Copy($CopyFromTargetURL, $CopyFromTargetRev, $TargetPathname);
+        Copy($CopyFromURLInTargetRepo, $CopyFromRevInTargetRepo, $TargetPathname);
 
         $PathnamesToUpdate->{$TargetPathname} = $SourceURL
     }
@@ -447,12 +448,12 @@ sub ReplacePathByCopying
     {
         for my $RelativePath (ReplaceDirectory($TargetPathname,
             $SourceURL, $RevisionNumber,
-            $CopyFromTargetURL, $CopyFromTargetRev,
+            $CopyFromURLInTargetRepo, $CopyFromRevInTargetRepo,
             $PathnamesToUpdate))
         {
             AddPathByCopying($TargetPathname . $RelativePath,
                 $SourceURL . $RelativePath, $RevisionNumber,
-                $CopyFromTargetURL . $RelativePath, $CopyFromTargetRev,
+                $CopyFromURLInTargetRepo . $RelativePath, $CopyFromRevInTargetRepo,
                 $PathnamesToUpdate)
         }
     }
@@ -461,7 +462,7 @@ sub ReplacePathByCopying
 sub ReplacePathByCopyImitation
 {
     my ($TargetPathname, $SourceURL, $RevisionNumber,
-        $CopyFromSourceURL, $CopyFromSourceRev,
+        $CopyFromURLInSourceRepo, $CopyFromRevInSourceRepo,
         $Mapping, $PathnamesToUpdate) = @_;
 
     print "[replace-by-copy-imitation]\n";
@@ -480,12 +481,12 @@ sub ReplacePathByCopyImitation
     {
         for my $RelativePath (ReplaceDirectory($TargetPathname,
             $SourceURL, $RevisionNumber,
-            $CopyFromSourceURL, $CopyFromSourceRev,
+            $CopyFromURLInSourceRepo, $CopyFromRevInSourceRepo,
             $PathnamesToUpdate))
         {
             AddPathByCopyImitation($TargetPathname . $RelativePath,
                 $SourceURL . $RelativePath, $RevisionNumber,
-                $CopyFromSourceURL . $RelativePath, $CopyFromSourceRev,
+                $CopyFromURLInSourceRepo . $RelativePath, $CopyFromRevInSourceRepo,
                 $Mapping, $PathnamesToUpdate)
         }
     }
@@ -538,7 +539,7 @@ sub ApplyRevisionChanges
 {
     my ($Self, $Revision) = @_;
 
-    my ($SourceRepoConf, $RevisionNumber) =
+    my ($SourceRepoConf, $SourceRevisionNumber) =
         @$Revision{qw(SourceRepoConf Number)};
 
     my ($RootURL, $SourcePathTree, $SourcePathToMapping) =
@@ -550,93 +551,98 @@ sub ApplyRevisionChanges
 
     for (@{$Revision->{ChangedPaths}})
     {
-        my ($Change, $ChangedSourcePath, $CopyFromSourcePath, $CopyFromSourceRev) = @$_;
+        my ($Change, $ChangedPathInSourceRepo,
+            $CopyFromPathInSourceRepo, $CopyFromRevInSourceRepo) = @$_;
 
         if ($Change !~ m/^[AMDR]$/so)
         {
             die "Unknown type of change '$Change' in " .
-                "revision $RevisionNumber of $RootURL\n"
+                "revision $SourceRevisionNumber of $RootURL\n"
         }
 
-        $ChangedSourcePath =~ s/^\/+//so;
+        # Remove the leading slash.
+        $ChangedPathInSourceRepo =~ s/^\/+//so;
 
-        my @DescendantSourcePaths;
+        my @SourcePaths_ChildrenOfChangedPath;
 
-        my $SourcePathAncestor = $SourcePathTree->TracePath(
-            $ChangedSourcePath, \@DescendantSourcePaths);
+        my $SourcePath_ParentOfChangedPath = $SourcePathTree->TracePath(
+            $ChangedPathInSourceRepo, \@SourcePaths_ChildrenOfChangedPath);
 
-        # The changed path must be either a descendant or an ancestor
-        # of a source path. Otherwise, it will be skipped.
-        if (defined $SourcePathAncestor)
+        # In order to be applied, the changed path must be either a descendant
+        # or an ancestor of a path configured for replication.
+        if (defined $SourcePath_ParentOfChangedPath)
         {
-            my $Mapping = $SourcePathToMapping->{$SourcePathAncestor};
+            my $Mapping = $SourcePathToMapping->{$SourcePath_ParentOfChangedPath};
 
-            my $RelativePath =
-                CutOffParent($ChangedSourcePath, $SourcePathAncestor);
+            my $RelativePath = CutOffParent($ChangedPathInSourceRepo,
+                $SourcePath_ParentOfChangedPath);
 
             next if defined $Mapping->{ExclusionTree}->TracePath($RelativePath);
 
             BeginWorkingCopyChange($Revision);
 
-            my $TargetPathname =
+            my $PathToChangeInTargetRepo =
                 JoinPaths($Mapping->{TargetPath}, $RelativePath);
 
-            CreateMissingParentDirs($TargetPathname);
+            CreateMissingParentDirs($PathToChangeInTargetRepo);
 
-            my $SourceURL = JoinPaths($RootURL, $ChangedSourcePath);
+            my $ChangedPathURL = JoinPaths($RootURL, $ChangedPathInSourceRepo);
 
             if ($Change eq 'D')
             {
-                delete $PathnamesToUpdate{$TargetPathname};
+                delete $PathnamesToUpdate{$PathToChangeInTargetRepo};
 
-                Delete($TargetPathname)
+                Delete($PathToChangeInTargetRepo)
             }
             elsif ($Change eq 'M')
             {
-                if (IsFile($RevisionNumber, $SourceURL))
+                if (IsFile($SourceRevisionNumber, $ChangedPathURL))
                 {
-                    print "M         $TargetPathname\n";
+                    print "M         $PathToChangeInTargetRepo\n";
 
-                    Export($SourceURL, $RevisionNumber, $TargetPathname)
+                    Export($ChangedPathURL, $SourceRevisionNumber,
+                        $PathToChangeInTargetRepo)
                 }
 
-                ResetProps($SourceURL, $RevisionNumber, $TargetPathname)
+                ResetProps($ChangedPathURL, $SourceRevisionNumber,
+                    $PathToChangeInTargetRepo)
             }
             else # $Change is either 'A' or 'R'.
             {
                 # Methods AddPath() and ReplacePath()
                 my $Action = $Change eq 'A' ? 'AddPath' : 'ReplacePath';
-                my @Args = ($TargetPathname, $SourceURL, $RevisionNumber);
+                my @Args = ($PathToChangeInTargetRepo,
+                    $ChangedPathURL, $SourceRevisionNumber);
 
-                if ($CopyFromSourcePath)
+                if ($CopyFromPathInSourceRepo)
                 {
-                    $CopyFromSourcePath =~ s/^\/+//so;
+                    $CopyFromPathInSourceRepo =~ s/^\/+//so;
 
-                    my ($CopyFromSourcePathAncestor,
-                        $CopyMapping, $CopyRelativePath);
+                    my ($SourcePath_ParentOfCopyFromPath,
+                        $CopyMapping, $RelativeCopyFromPath);
 
-                    if (defined($CopyFromSourcePathAncestor =
-                        $SourcePathTree->TracePath($CopyFromSourcePath)) and
+                    if (defined($SourcePath_ParentOfCopyFromPath =
+                        $SourcePathTree->TracePath($CopyFromPathInSourceRepo)) and
                         $CopyMapping = $SourcePathToMapping->{
-                            $CopyFromSourcePathAncestor} and
+                            $SourcePath_ParentOfCopyFromPath} and
                         !defined($CopyMapping->{ExclusionTree}->TracePath(
-                            $CopyRelativePath =
-                                CutOffParent($CopyFromSourcePath,
-                                    $CopyFromSourcePathAncestor))))
+                            $RelativeCopyFromPath =
+                                CutOffParent($CopyFromPathInSourceRepo,
+                                    $SourcePath_ParentOfCopyFromPath))))
                     {
                         # Methods AddPathByCopying() and ReplacePathByCopying()
                         $Action .= 'ByCopying';
                         push @Args, JoinPaths($TargetRepositoryURL,
-                                JoinPaths($CopyMapping->{TargetPath}, $CopyRelativePath)),
-                            FindTargetRevBySourceRev($CopyFromSourceRev)
+                                JoinPaths($CopyMapping->{TargetPath}, $RelativeCopyFromPath)),
+                            FindTargetRevBySourceRev($CopyFromRevInSourceRepo)
                     }
                     else
                     {
                         # Methods AddPathByCopyImitation() and
                         # ReplacePathByCopyImitation()
                         $Action .= 'ByCopyImitation';
-                        push @Args, JoinPaths($RootURL, $CopyFromSourcePath),
-                            $CopyFromSourceRev, $Mapping
+                        push @Args, JoinPaths($RootURL, $CopyFromPathInSourceRepo),
+                            $CopyFromRevInSourceRepo, $Mapping
                     }
 
                     push @Args, \%PathnamesToUpdate
@@ -645,7 +651,7 @@ sub ApplyRevisionChanges
                 $Self->can($Action)->(@Args)
             }
         }
-        elsif (@DescendantSourcePaths)
+        elsif (@SourcePaths_ChildrenOfChangedPath)
         {
             if ($Change eq 'M')
             {
@@ -656,62 +662,64 @@ sub ApplyRevisionChanges
             {
                 BeginWorkingCopyChange($Revision);
 
-                for my $SourcePath (map {$_->[1]} @DescendantSourcePaths)
+                for my $SourcePath (
+                    map {$_->[1]} @SourcePaths_ChildrenOfChangedPath)
                 {
-                    my $TargetPathname =
+                    my $TargetPath =
                         $SourcePathToMapping->{$SourcePath}->{TargetPath};
 
-                    if (-e $TargetPathname)
+                    if (-e $TargetPath)
                     {
-                        delete $PathnamesToUpdate{$TargetPathname};
+                        delete $PathnamesToUpdate{$TargetPath};
 
-                        Delete($TargetPathname)
+                        Delete($TargetPath)
                     }
                 }
             }
             else # $Change is either 'A' or 'R'.
             {
                 # Ignore modifications that are not copies.
-                next unless $CopyFromSourcePath;
+                next unless $CopyFromPathInSourceRepo;
 
                 BeginWorkingCopyChange($Revision);
 
-                $CopyFromSourcePath =~ s/^\/+//so;
+                $CopyFromPathInSourceRepo =~ s/^\/+//so;
 
-                my $CopyFromTargetRev =
-                    FindTargetRevBySourceRev($CopyFromSourceRev);
+                my $CopyFromRevInTargetRepo =
+                    FindTargetRevBySourceRev($CopyFromRevInSourceRepo);
 
-                for (@DescendantSourcePaths)
+                for (@SourcePaths_ChildrenOfChangedPath)
                 {
-                    my ($RelativePath, $SourcePath) = @$_;
+                    my ($RelativePath, $SourcePath_CopyTarget) = @$_;
 
-                    my $Mapping = $SourcePathToMapping->{$SourcePath};
+                    my $Mapping = $SourcePathToMapping->{$SourcePath_CopyTarget};
 
-                    my $TargetPathname = $Mapping->{TargetPath};
+                    my $TargetPath = $Mapping->{TargetPath};
 
-                    my $SourceURL = JoinPaths($RootURL, $SourcePath);
+                    my $SourcePathURL_CopyTarget = JoinPaths($RootURL, $SourcePath_CopyTarget);
 
                     eval
                     {
-                        $SVN->ReadInfo("$SourceURL\@$RevisionNumber")
+                        $SVN->ReadInfo("$SourcePathURL_CopyTarget\@$SourceRevisionNumber")
                     };
                     if ($@)
                     {
-                        if (-e $TargetPathname)
+                        if (-e $TargetPath)
                         {
-                            delete $PathnamesToUpdate{$TargetPathname};
+                            delete $PathnamesToUpdate{$TargetPath};
 
-                            Delete($TargetPathname)
+                            Delete($TargetPath)
                         }
                     }
                     else
                     {
                         my $Action;
-                        my @Args = ($TargetPathname, $SourceURL, $RevisionNumber);
+                        my @Args = ($TargetPath,
+                            $SourcePathURL_CopyTarget, $SourceRevisionNumber);
 
-                        unless (-e $TargetPathname)
+                        unless (-e $TargetPath)
                         {
-                            CreateMissingParentDirs($TargetPathname);
+                            CreateMissingParentDirs($TargetPath);
 
                             $Action = 'AddPath'
                         }
@@ -720,26 +728,26 @@ sub ApplyRevisionChanges
                             $Action = 'ReplacePath'
                         }
 
-                        my $LocalCopyFromSourcePath =
-                            JoinPaths($CopyFromSourcePath, $RelativePath);
+                        my $CopyFromSourcePath =
+                            JoinPaths($CopyFromPathInSourceRepo, $RelativePath);
 
-                        my ($CopyFromSourcePathAncestor,
-                            $CopyMapping, $CopyRelativePath) = @_;
+                        my ($SourcePath_ParentOfCopyFromPath,
+                            $CopyMapping, $RelativeCopyFromPath);
 
-                        if (defined($CopyFromSourcePathAncestor =
-                            $SourcePathTree->TracePath($LocalCopyFromSourcePath)) and
+                        if (defined($SourcePath_ParentOfCopyFromPath =
+                            $SourcePathTree->TracePath($CopyFromSourcePath)) and
                             $CopyMapping = $SourcePathToMapping->{
-                                $CopyFromSourcePathAncestor} and
+                                $SourcePath_ParentOfCopyFromPath} and
                             !defined $CopyMapping->{ExclusionTree}->TracePath(
-                            $CopyRelativePath = CutOffParent(
-                                $LocalCopyFromSourcePath,
-                                    $CopyFromSourcePathAncestor)))
+                            $RelativeCopyFromPath = CutOffParent(
+                                $CopyFromSourcePath,
+                                    $SourcePath_ParentOfCopyFromPath)))
                         {
                             # Methods AddPathByCopying() and ReplacePathByCopying()
                             $Action .= 'ByCopying';
                             push @Args, JoinPaths($TargetRepositoryURL,
-                                JoinPaths($CopyMapping->{TargetPath}, $CopyRelativePath)),
-                                $CopyFromTargetRev
+                                JoinPaths($CopyMapping->{TargetPath}, $RelativeCopyFromPath)),
+                                $CopyFromRevInTargetRepo
                         }
                         else
                         {
@@ -747,8 +755,8 @@ sub ApplyRevisionChanges
                             # ReplacePathByCopyImitation()
                             $Action .= 'ByCopyImitation';
                             push @Args,
-                                JoinPaths($RootURL, $LocalCopyFromSourcePath),
-                                $CopyFromSourceRev, $Mapping
+                                JoinPaths($RootURL, $CopyFromSourcePath),
+                                $CopyFromRevInSourceRepo, $Mapping
                         }
 
                         push @Args, \%PathnamesToUpdate;
@@ -766,9 +774,9 @@ sub ApplyRevisionChanges
         {
             my $SourceURL = $PathnamesToUpdate{$Pathname};
 
-            Export($SourceURL, $RevisionNumber, $Pathname) if -f $Pathname;
+            Export($SourceURL, $SourceRevisionNumber, $Pathname) if -f $Pathname;
 
-            ResetProps($SourceURL, $RevisionNumber, $Pathname)
+            ResetProps($SourceURL, $SourceRevisionNumber, $Pathname)
         }
     }
 
@@ -791,12 +799,12 @@ sub ApplyRevisionChanges
         {
             print $Output;
 
-            my $RevProps = $SVN->ReadRevProps($RevisionNumber, $RootURL);
+            my $RevProps = $SVN->ReadRevProps($SourceRevisionNumber, $RootURL);
 
             delete $RevProps->{'svn:log'};
             delete $RevProps->{'svn:author'} unless $CommitCredentials;
 
-            $RevProps->{$OriginalRevPropName} = $RevisionNumber;
+            $RevProps->{$OriginalRevPropName} = $SourceRevisionNumber;
 
             while (my ($Name, $Value) = each %$RevProps)
             {
