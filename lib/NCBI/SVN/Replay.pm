@@ -781,6 +781,14 @@ sub ApplyRevisionChanges
 
     if ($Revision->{HasChangedWorkingCopy})
     {
+        my $PreCommitHook = $SourceRepoConf->{PreCommitHook};
+
+        if ($PreCommitHook && !$PreCommitHook->($Revision))
+        {
+            print "WARNING: pre-commit hook aborted the commit.\n";
+            return 0
+        }
+
         if (grep(m/^\?/o, $SVN->ReadSubversionLines(qw(status --ignore-externals))))
         {
             die "Cannot proceed: not all new files have been added.\n"
