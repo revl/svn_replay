@@ -127,8 +127,7 @@ sub FindTargetRevBySourceRev
 
         for (;;)
         {
-            die "Could not find revision by original revision $SourceRevNumber.\n"
-                if $TargetRevNumber <= 0;
+            return 0 if $TargetRevNumber <= 0;
 
             my $Bound = $TargetRevNumber > $LogChunkSize ?
                 $TargetRevNumber - $LogChunkSize + 1 : 1;
