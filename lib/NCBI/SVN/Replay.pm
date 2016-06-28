@@ -900,7 +900,7 @@ sub Run
 
     $SVN->RunSubversion(qw(update --ignore-externals));
 
-    my $TargetPathInfo = $SVN->ReadInfo('.', grep {-d} @{$Conf->{TargetPaths}});
+    my $TargetPathInfo = $SVN->ReadInfo('.', grep {-e} @{$Conf->{TargetPaths}});
 
     $TargetRepositoryURL = $TargetPathInfo->{'.'}->{Root};
 
