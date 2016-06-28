@@ -66,17 +66,15 @@ sub TracePath
 
 package NCBI::SVN::Replay::Conf;
 
-my $ConfFile;
-
 sub BuildTree
 {
-    my ($Paths, $PathType) = @_;
+    my ($Conf, $Paths, $PathType) = @_;
 
     my $Root = {};
 
     for my $Path (@$Paths)
     {
-        ref($Root) eq 'HASH' or die "$ConfFile\: cannot " .
+        ref($Root) eq 'HASH' or die "$Conf->{ConfFile}: cannot " .
             "combine an empty path with other $PathType paths.\n";
 
         my $NodeRef = \$Root;
@@ -85,7 +83,7 @@ sub BuildTree
         {
             next unless $Dir;
 
-            ref($$NodeRef) eq 'HASH' or die "$ConfFile\: " .
+            ref($$NodeRef) eq 'HASH' or die "$Conf->{ConfFile}: " .
                 "$PathType paths '$Path' and '$$NodeRef' overlap.\n";
 
             $NodeRef = \(${$NodeRef}->{$Dir} ||= {})
@@ -93,7 +91,8 @@ sub BuildTree
 
         if (%$$NodeRef)
         {
-            die "$ConfFile\: $PathType path '$Path' overlaps other path(s).\n"
+            die "$Conf->{ConfFile}: $PathType path '$Path' " .
+                "overlaps other path(s).\n"
         }
 
         $$NodeRef = $Path
@@ -104,12 +103,12 @@ sub BuildTree
 
 sub RequireParam
 {
-    my ($Hash, $ParamName) = @_;
+    my ($Conf, $ParamName) = @_;
 
-    my $Value = $Hash->{$ParamName};
+    my $Value = $Conf->{$ParamName};
     if (!defined $Value || (ref($Value) eq 'ARRAY' && @$Value == 0))
     {
-        die "$ConfFile\: missing required parameter '$ParamName'.\n"
+        die "$Conf->{ConfFile}: missing required parameter '$ParamName'.\n"
     }
 
     return $Value
@@ -117,19 +116,20 @@ sub RequireParam
 
 sub new
 {
-    my $Class = shift;
-    $ConfFile = shift;
+    my ($Class, $ConfFile) = @_;
 
-    my $Self = do $ConfFile;
+    my $Conf = do $ConfFile;
 
-    unless (ref($Self) eq 'HASH')
+    unless (ref($Conf) eq 'HASH')
     {
         die "$ConfFile\: $@\n" if $@;
-        die "$ConfFile\: $!\n" unless defined $Self;
+        die "$ConfFile\: $!\n" unless defined $Conf;
         die "$ConfFile\: configuration file must return a hash\n"
     }
 
-    my $SourceRepositories = RequireParam($Self, 'SourceRepositories');
+    $Conf->{ConfFile} = $ConfFile;
+
+    my $SourceRepositories = RequireParam($Conf, 'SourceRepositories');
 
     my @TargetPaths;
 
@@ -164,22 +164,23 @@ sub new
             push @RepoTargetPaths, $TargetPath;
 
             $Mapping->{ExclusionTree} =
-                BuildTree($Mapping->{ExclusionList} || [], 'exclusion')
+                BuildTree($Conf, $Mapping->{ExclusionList} || [], 'exclusion')
         }
 
-        $SourceRepoConf->{SourcePathTree} = BuildTree(\@SourcePaths, 'source');
+        $SourceRepoConf->{SourcePathTree} =
+            BuildTree($Conf, \@SourcePaths, 'source');
 
         $SourceRepoConf->{TargetPathTree} =
-            BuildTree(\@RepoTargetPaths, 'target');
+            BuildTree($Conf, \@RepoTargetPaths, 'target');
 
         $SourceRepoConf->{TargetPaths} = \@RepoTargetPaths
     }
 
-    $Self->{TargetPathTree} = BuildTree(\@TargetPaths, 'target');
+    $Conf->{TargetPathTree} = BuildTree($Conf, \@TargetPaths, 'target');
 
-    $Self->{TargetPaths} = \@TargetPaths;
+    $Conf->{TargetPaths} = \@TargetPaths;
 
-    return bless $Self, $Class
+    return bless $Conf, $Class
 }
 
 1
