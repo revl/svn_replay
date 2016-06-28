@@ -29,15 +29,13 @@ use NCBI::SVN::Replay::Conf;
 
 sub Run
 {
-    my ($Self, $ConfFile, $TargetWorkingCopy, $InitPath) = @_;
+    my ($Self, $Conf, $TargetWorkingCopy, $InitPath) = @_;
 
     if (-d $InitPath)
     {
         die "$Self->{MyName}: cannot create repository: " .
             "$InitPath already exists.\n"
     }
-
-    my $Conf = NCBI::SVN::Replay::Conf->new($ConfFile);
 
     if (-d $TargetWorkingCopy)
     {

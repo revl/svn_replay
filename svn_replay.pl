@@ -96,8 +96,13 @@ if (@ARGV != 2)
     $Help ? Help() : UsageError('invalid number of positional arguments.')
 }
 
+my ($ConfFile, $TargetWorkingCopy) = @ARGV;
+
+my $Conf = NCBI::SVN::Replay::Conf->new($ConfFile);
+
 my $Class = $InitPath ? 'NCBI::SVN::Replay::Init' : 'NCBI::SVN::Replay';
 
-exit $Class->new(MyName => $ScriptName)->Run(@ARGV, $InitPath)
+exit $Class->new(MyName => $ScriptName)->Run($Conf,
+    $TargetWorkingCopy, $InitPath)
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab

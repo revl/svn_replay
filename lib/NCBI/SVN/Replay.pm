@@ -881,9 +881,7 @@ sub PopRevisionArray
 
 sub Run
 {
-    my ($Self, $ConfFile, $TargetWorkingCopy) = @_;
-
-    my $Conf = NCBI::SVN::Replay::Conf->new($ConfFile);
+    my ($Self, $Conf, $TargetWorkingCopy) = @_;
 
     $SVN = $Self->{SVN};
 
