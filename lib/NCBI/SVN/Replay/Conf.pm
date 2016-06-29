@@ -186,13 +186,11 @@ sub new
         $SourceRepoConf->{SourcePathTree} =
             BuildTree($Conf, \@SourcePaths, 'source');
 
-        $SourceRepoConf->{TargetPathTree} =
-            BuildTree($Conf, \@RepoTargetPaths, 'target');
-
         $SourceRepoConf->{TargetPaths} = \@RepoTargetPaths
     }
 
-    $Conf->{TargetPathTree} = BuildTree($Conf, \@TargetPaths, 'target');
+    # Build a tree of target paths just to make sure they don't overlap.
+    BuildTree($Conf, \@TargetPaths, 'target');
 
     $Conf->{TargetPaths} = \@TargetPaths;
 
