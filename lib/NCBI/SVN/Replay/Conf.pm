@@ -114,7 +114,7 @@ sub RequireParam
     return $Value
 }
 
-sub new
+sub Load
 {
     my ($Class, $ConfFile) = @_;
 
@@ -128,6 +128,22 @@ sub new
     }
 
     $Conf->{ConfFile} = $ConfFile;
+
+    return new($Class, $Conf)
+}
+
+sub new
+{
+    my ($Class, $Conf) = @_;
+
+    unless ($Conf->{ConfFile})
+    {
+        my @Caller = caller(0);
+
+        use File::Basename;
+
+        $Conf->{ConfFile} = basename($Caller[1]) . ':' . $Caller[2]
+    }
 
     my $SourceRepositories = RequireParam($Conf, 'SourceRepositories');
 

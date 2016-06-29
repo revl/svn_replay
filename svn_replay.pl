@@ -98,7 +98,7 @@ if (@ARGV != 2)
 
 my ($ConfFile, $TargetWorkingCopy) = @ARGV;
 
-my $Conf = NCBI::SVN::Replay::Conf->new($ConfFile);
+my $Conf = NCBI::SVN::Replay::Conf->Load($ConfFile);
 
 my $Class = $InitPath ? 'NCBI::SVN::Replay::Init' : 'NCBI::SVN::Replay';
 
