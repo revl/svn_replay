@@ -68,13 +68,13 @@ package NCBI::SVN::Replay::Conf;
 
 sub BuildTree
 {
-    my ($Conf, $Paths, $PathType) = @_;
+    my ($Paths, $ConfFile, $PathType) = @_;
 
     my $Root = {};
 
     for my $Path (@$Paths)
     {
-        ref($Root) eq 'HASH' or die "$Conf->{ConfFile}: cannot " .
+        ref($Root) eq 'HASH' or die "$ConfFile\: cannot " .
             "combine an empty path with other $PathType paths.\n";
 
         my $NodeRef = \$Root;
@@ -83,7 +83,7 @@ sub BuildTree
         {
             next unless $Dir;
 
-            ref($$NodeRef) eq 'HASH' or die "$Conf->{ConfFile}: " .
+            ref($$NodeRef) eq 'HASH' or die "$ConfFile\: " .
                 "$PathType paths '$Path' and '$$NodeRef' overlap.\n";
 
             $NodeRef = \(${$NodeRef}->{$Dir} ||= {})
@@ -91,8 +91,7 @@ sub BuildTree
 
         if (%$$NodeRef)
         {
-            die "$Conf->{ConfFile}: $PathType path '$Path' " .
-                "overlaps other path(s).\n"
+            die "$ConfFile\: $PathType path '$Path' overlaps other path(s).\n"
         }
 
         $$NodeRef = $Path
@@ -103,12 +102,16 @@ sub BuildTree
 
 sub RequireParam
 {
-    my ($Conf, $ParamName) = @_;
+    my ($Conf, $ParamName, $ConfFile) = @_;
 
     my $Value = $Conf->{$ParamName};
-    if (!defined $Value || (ref($Value) eq 'ARRAY' && @$Value == 0))
+    if (!defined $Value)
     {
-        die "$Conf->{ConfFile}: missing required parameter '$ParamName'.\n"
+        die "$ConfFile\: missing required parameter '$ParamName'.\n"
+    }
+    if (ref($Value) eq 'ARRAY' && @$Value == 0)
+    {
+        die "$ConfFile\: '$ParamName' cannot be empty.\n"
     }
 
     return $Value
@@ -136,23 +139,26 @@ sub new
 {
     my ($Class, $Conf) = @_;
 
-    unless ($Conf->{ConfFile})
+    my $ConfFile = $Conf->{ConfFile};
+
+    unless ($ConfFile)
     {
         my @Caller = caller(0);
 
         use File::Basename;
 
-        $Conf->{ConfFile} = basename($Caller[1]) . ':' . $Caller[2]
+        $ConfFile = basename($Caller[1]) . ':' . $Caller[2]
     }
 
-    my $SourceRepositories = RequireParam($Conf, 'SourceRepositories');
+    my $SourceRepositories = RequireParam($Conf,
+        'SourceRepositories', $ConfFile);
 
     my @TargetPaths;
 
     for my $SourceRepoConf (@$SourceRepositories)
     {
-        RequireParam($SourceRepoConf, 'RepoName');
-        RequireParam($SourceRepoConf, 'RootURL');
+        RequireParam($SourceRepoConf, 'RepoName', $ConfFile);
+        RequireParam($SourceRepoConf, 'RootURL', $ConfFile);
 
         my @SourcePaths;
         my @RepoTargetPaths;
@@ -164,33 +170,35 @@ sub new
                 ExclusionList => $SourceRepoConf->{ExclusionList}}]
         }
 
-        my $PathMapping = RequireParam($SourceRepoConf, 'PathMapping');
+        my $PathMapping = RequireParam($SourceRepoConf,
+            'PathMapping', $ConfFile);
 
         my $SourcePathToMapping = $SourceRepoConf->{SourcePathToMapping} = {};
 
         for my $Mapping (@$PathMapping)
         {
-            my $SourcePath = RequireParam($Mapping, 'SourcePath');
+            my $SourcePath = RequireParam($Mapping, 'SourcePath', $ConfFile);
             push @SourcePaths, $SourcePath;
 
             $SourcePathToMapping->{$SourcePath} = $Mapping;
 
-            my $TargetPath = RequireParam($Mapping, 'TargetPath');
+            my $TargetPath = RequireParam($Mapping, 'TargetPath', $ConfFile);
             push @TargetPaths, $TargetPath;
             push @RepoTargetPaths, $TargetPath;
 
             $Mapping->{ExclusionTree} =
-                BuildTree($Conf, $Mapping->{ExclusionList} || [], 'exclusion')
+                BuildTree($Mapping->{ExclusionList} || [],
+                    $ConfFile, 'exclusion')
         }
 
         $SourceRepoConf->{SourcePathTree} =
-            BuildTree($Conf, \@SourcePaths, 'source');
+            BuildTree(\@SourcePaths, $ConfFile, 'source');
 
         $SourceRepoConf->{TargetPaths} = \@RepoTargetPaths
     }
 
     # Build a tree of target paths just to make sure they don't overlap.
-    BuildTree($Conf, \@TargetPaths, 'target');
+    BuildTree(\@TargetPaths, $ConfFile, 'target');
 
     $Conf->{TargetPaths} = \@TargetPaths;
 
