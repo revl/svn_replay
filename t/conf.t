@@ -22,9 +22,9 @@ use lib @LibDirs;
 
 use NCBI::SVN::Replay::Conf;
 
-my $ConfHash = {};
+my %ConfHash;
 
-eval {NCBI::SVN::Replay::Conf->new($ConfHash)}; my $Line = __LINE__;
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)}; my $Line = __LINE__;
 my $Caller = basename($0) . ':' . $Line;
 
 # Make sure the caller line number is present in the error message
@@ -35,56 +35,60 @@ like($@, qr($Caller), 'Line number in error message');
 # paramer - triggers an error.
 like($@, qr(missing.*SourceRepositories), 'Require SourceRepositories');
 
-my $SourceRepositories = $ConfHash->{SourceRepositories} = [];
+my @SourceRepositories;
+
+$ConfHash{SourceRepositories} = \@SourceRepositories;
 
 # Verify that at least one source repository is required.
-eval {NCBI::SVN::Replay::Conf->new($ConfHash)};
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(SourceRepositories.*empty), 'At least one repo is required');
 
-my $RepoConf = {};
+my %RepoConf;
 
-push @$SourceRepositories, $RepoConf;
+push @SourceRepositories, \%RepoConf;
 
 # Verify that RepoName is required.
-eval {NCBI::SVN::Replay::Conf->new($ConfHash)};
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(missing.*RepoName), 'Require RepoName');
 
-$RepoConf->{RepoName} = 'test_repo';
+$RepoConf{RepoName} = 'test_repo';
 
 # Verify that RootURL is required.
-eval {NCBI::SVN::Replay::Conf->new($ConfHash)};
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(missing.*RootURL), 'Require RootURL');
 
-$RepoConf->{RootURL} = 'file:///home/nobody/test_repo';
+$RepoConf{RootURL} = 'file:///home/nobody/test_repo';
 
 # Verify that PathMapping is required.
-eval {NCBI::SVN::Replay::Conf->new($ConfHash)};
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(missing.*PathMapping), 'Require PathMapping');
 
-my $PathMapping = $RepoConf->{PathMapping} = [];
+my @PathMapping;
+
+$RepoConf{PathMapping} = \@PathMapping;
 
 # Verify that empty PathMapping array is not allowed.
-eval {NCBI::SVN::Replay::Conf->new($ConfHash)};
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(PathMapping.*empty), 'PathMapping cannot be empty');
 
-my $OneMapping = {};
+my %OneMapping;
 
-push @$PathMapping, $OneMapping;
+push @PathMapping, \%OneMapping;
 
 # Verify that SourcePath is required.
-eval {NCBI::SVN::Replay::Conf->new($ConfHash)};
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(missing.*SourcePath), 'Require SourcePath');
 
-$OneMapping->{SourcePath} = 'from/path';
+$OneMapping{SourcePath} = 'from/path';
 
 # Verify that TargetPath is required.
-eval {NCBI::SVN::Replay::Conf->new($ConfHash)};
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(missing.*TargetPath), 'Require TargetPath');
 
-$OneMapping->{TargetPath} = 'to/path';
+$OneMapping{TargetPath} = 'to/path';
 
 # Finally, the next call should succeed.
-my $Conf = NCBI::SVN::Replay::Conf->new($ConfHash);
+my $Conf = NCBI::SVN::Replay::Conf->new(\%ConfHash);
 
 # Make sure the correct class is instantiated...
 isa_ok($Conf, 'NCBI::SVN::Replay::Conf', '$Conf');
