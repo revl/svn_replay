@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 15;
+use Test::More tests => 16;
 
 use File::Basename;
 use File::Spec;
@@ -122,7 +122,18 @@ like($@, qr(target.*/subdir.*overlap), 'Reject overlapping TargetPaths');
 
 $AnotherMapping{TargetPath} = 'to/another/path';
 
+# Check that the configuration is now valid and the
+# tree of source paths successfully builds.
 $Conf = NCBI::SVN::Replay::Conf->new(\%ConfHash);
+
+is_deeply($RepoConf{SourcePathTree},
+    {
+        from =>
+        {
+            path => 'from/path',
+            another => {path => 'from/another/path'}
+        }
+    });
 
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab
