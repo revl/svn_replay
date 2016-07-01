@@ -74,8 +74,8 @@ sub BuildTree
 
     for my $Path (@$Paths)
     {
-        ref($Root) eq 'HASH' or die "$ConfFile\: cannot " .
-            "combine an empty path with other $PathType paths.\n";
+        ref($Root) eq 'HASH' or die "$ConfFile\: " .
+            "$PathType path cannot be empty.";
 
         my $NodeRef = \$Root;
 
@@ -87,6 +87,13 @@ sub BuildTree
                 "$PathType paths '$Path' and '$$NodeRef' overlap.\n";
 
             $NodeRef = \(${$NodeRef}->{$Dir} ||= {})
+        }
+
+        if (ref($$NodeRef) ne 'HASH')
+        {
+            die "$ConfFile\: " . ($Path eq $$NodeRef ?
+                "found duplicate $PathType paths '$Path'.\n" :
+                "$PathType paths '$Path' and '$$NodeRef' overlap.\n")
         }
 
         if (%$$NodeRef)

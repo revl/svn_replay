@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 11;
+use Test::More tests => 15;
 
 use File::Basename;
 use File::Spec;
@@ -90,11 +90,39 @@ $OneMapping{TargetPath} = 'to/path';
 # Finally, the next call should succeed.
 my $Conf = NCBI::SVN::Replay::Conf->new(\%ConfHash);
 
-# Make sure the correct class is instantiated...
+# Make sure the correct class is instantiated.
 isa_ok($Conf, 'NCBI::SVN::Replay::Conf', '$Conf');
 
 # ...and the object is also a hash.
 isa_ok($Conf, 'HASH', '$Conf');
+
+# Verify that overlapping of source paths (as well as
+# overlapping of target paths) is not allowed.
+my %AnotherMapping = %OneMapping;
+
+push @PathMapping, \%AnotherMapping;
+
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
+like($@, qr(duplicate.*from/path), 'Reject duplicate SourcePaths');
+
+$AnotherMapping{SourcePath} .= '/subdir';
+
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
+like($@, qr(source.*/subdir.*overlap), 'Reject overlapping SourcePaths');
+
+$AnotherMapping{SourcePath} = 'from/another/path';
+
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
+like($@, qr(duplicate.*to/path), 'Reject duplicate TargetPaths');
+
+$AnotherMapping{TargetPath} .= '/subdir';
+
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
+like($@, qr(target.*/subdir.*overlap), 'Reject overlapping TargetPaths');
+
+$AnotherMapping{TargetPath} = 'to/another/path';
+
+$Conf = NCBI::SVN::Replay::Conf->new(\%ConfHash);
 
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab
