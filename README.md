@@ -24,6 +24,13 @@ replication. The target repository can also be modified provided
 that all changes happen outside the `svn_replay` destination
 directories.
 
+Installation
+------------
+
+No installation required. Simply run `svn_replay.pl` from the root
+directory. Optionally, a symbolic link to the script can be created
+for a shorter name.
+
 TBC
 
 Disclamer
