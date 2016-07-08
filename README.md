@@ -4,7 +4,7 @@ svn_replay
 This tool was created for internal use and with a single purpose.
 It wasn't meant to be reused, let alone open sourced.
 Yet I keep coming back to it whenever I need to perform a "surgery"
-that `svndumpfilter` wasn't designed to handle.  So the tool is
+that `svndumpfilter` wasn't designed to handle. And so the tool is
 published here in hope that someone else finds it useful.
 
 `svn_replay` works by reading changesets of one or more source
