@@ -64,11 +64,11 @@ one source repository and the path for it in the target repository.
         ]
     }
 
-This example becomes somewhat more practical with addition of
+The example becomes somewhat more practical with addition of
 another source repository:
 
-    # Turn the entire 'source_repo' into a single directory inside
-    # the target repository.
+    # Merge two repositories by putting each of them into
+    # sibling directories in the target repository.
     {
         SourceRepositories =>
         [
