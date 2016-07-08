@@ -42,6 +42,29 @@ one-to-one mapping of a set of non-overlapping directories in one
 or more source repositories onto a set of non-overlapping
 directories in the target repository.
 
+The configuration file for `svn_replay` is a simple Perl script,
+which must end with a HASH definition.
+
+Below is an example of a simple configuration file.  It defines
+one source repository and one path mapping.
+
+    {
+        SourceRepositories =>
+        [
+            {
+                RepoName => 'source_repo',
+                RootURL => 'file:///path/to/svn/repos/source_repo',
+                PathMapping =>
+                [
+                    {
+                        SourcePath => 'path/in/source/repo',
+                        TargetPath => 'path/in/target/repo'
+                    },
+                ]
+            }
+        ]
+    }
+
 TBC
 
 Disclaimer
