@@ -48,26 +48,32 @@ set of non-overlapping directories in one or more source
 repositories onto a set of non-overlapping directories in the
 target repository.
 
-Below is an example of a very basic configuration file.  It defines
-one source repository and the path for it in the target repository.
+Below is an example of a very basic configuration file.  It sets
+up replication of a single directory of one repository to a
+directory inside another repository.
 
-    # Turn the entire 'source_repo' into a single directory inside
-    # the target repository.
+    # Replicate a directory from one repository to another.
     {
         SourceRepositories =>
         [
             {
                 RepoName => 'source_repo',
                 RootURL => 'https://svn.example.org/repos/source_repo',
-                TargetPath => 'path/in/target/repo'
+                PathMapping =>
+                [
+                    {
+                        SourcePath => 'path/in/source/repo',
+                        TargetPath => 'path/in/target/repo'
+                    }
+                ]
             }
         ]
     }
 
-The example becomes somewhat more practical with addition of
-another source repository:
+Another simple example, with two source repositories this time
+around:
 
-    # Merge two repositories by putting each of them into
+    # Merge trunks of two repositories by putting them into
     # sibling directories in the target repository.
     {
         SourceRepositories =>
@@ -75,14 +81,26 @@ another source repository:
             {
                 RepoName => 'red_source_repo',
                 RootURL => 'https://svn/repos/red_repo',
-                TargetPath => 'colors/red'
+                PathMapping =>
+                [
+                    {
+                        SourcePath => 'trunk',
+                        TargetPath => 'trunk/colors/red'
+                    }
+                ]
             }
         ],
         [
             {
                 RepoName => 'blue_source_repo',
                 RootURL => 'https://svn/repos/blue_repo',
-                TargetPath => 'colors/blue'
+                PathMapping =>
+                [
+                    {
+                        SourcePath => 'trunk',
+                        TargetPath => 'trunk/colors/blue'
+                    }
+                ]
             }
         ]
     }
