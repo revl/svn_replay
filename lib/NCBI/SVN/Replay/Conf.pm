@@ -170,13 +170,6 @@ sub new
         my @SourcePaths;
         my @RepoTargetPaths;
 
-        if ($SourceRepoConf->{TargetPath})
-        {
-            $SourceRepoConf->{PathMapping} = [{SourcePath => '',
-                TargetPath => $SourceRepoConf->{TargetPath},
-                ExclusionList => $SourceRepoConf->{ExclusionList}}]
-        }
-
         my $PathMapping = RequireParam($SourceRepoConf,
             'PathMapping', $ConfFile);
 
