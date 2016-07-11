@@ -86,9 +86,6 @@ that hash are as follows:
   the source repository onto a set of non-overlapping directories
   in the target repository.
 
-Just like there can be multiple source repositories, there can be
-multiple `PathMapping` elements for each repository.
-
 In the example below, trunks of two source repositories become
 sibling directories in the target repository:
 
@@ -122,8 +119,11 @@ sibling directories in the target repository:
         ]
     }
 
-And here's an example of multiple `PathMapping` elements defined
-for one source repository:
+Just like there can be multiple source repositories, there can be
+multiple `PathMapping` elements for each repository.  Here's an
+example where pathnames of the `include` and `src` directories of
+a C library are rewritten so that the library has its own private
+directory.
 
     {
         SourceRepositories =>
