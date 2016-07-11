@@ -43,16 +43,10 @@ Configuration
 The configuration file for `svn_replay` is a simple Perl script,
 which must end with a HASH definition.
 
-The primary configuration parameter is a one-to-one mapping of a
-set of non-overlapping directories in one or more source
-repositories onto a set of non-overlapping directories in the
-target repository.
-
 Below is an example of a very basic configuration file.  It sets
-up replication of a single directory of one repository to a
-directory inside another repository.
+up replication of a single directory of one source repository to a
+directory inside the target repository.
 
-    # Replicate a directory from one repository to another.
     {
         SourceRepositories =>
         [
@@ -70,11 +64,34 @@ directory inside another repository.
         ]
     }
 
-Another simple example, with two source repositories this time
-around:
+As can be seen from the example, the root configuration hash
+consists of a single key, `SourceRepositories`, and the value of
+this key is an array of hashes, each referring to a single source
+repository.
 
-    # Merge trunks of two repositories by putting them into
-    # sibling directories in the target repository.
+The example above uses only one source repository and therefore
+its `SourceRepositories` array contains only one hash. The keys of
+that hash are as follows:
+
+- `RepoName` defines the name of the source repository.  This name
+  is used internally and also appears in the output of the script.
+  Note that because there is only one target repository, it does
+  not need a name.
+
+- `RootURL` defines the URL that will be used for repository
+  access.
+
+- `PathMapping` is the primary configuration parameter and defines
+  a one-to-one mapping of a set of non-overlapping directories in
+  the source repository onto a set of non-overlapping directories
+  in the target repository.
+
+Just like there can be multiple source repositories, there can be
+multiple `PathMapping` elements for each repository.
+
+In the example below, trunks of two source repositories become
+sibling directories in the target repository:
+
     {
         SourceRepositories =>
         [
@@ -99,6 +116,30 @@ around:
                     {
                         SourcePath => 'trunk',
                         TargetPath => 'trunk/colors/blue'
+                    }
+                ]
+            }
+        ]
+    }
+
+And here's an example of multiple `PathMapping` elements defined
+for one source repository:
+
+    {
+        SourceRepositories =>
+        [
+            {
+                RepoName => 'source_repo',
+                RootURL => 'https://svn.example.org/repos/source_repo',
+                PathMapping =>
+                [
+                    {
+                        SourcePath => 'trunk/include/mylib',
+                        TargetPath => 'trunk/mylib/include/mylib'
+                    },
+                    {
+                        SourcePath => 'trunk/src/mylib',
+                        TargetPath => 'trunk/mylib/src'
                     }
                 ]
             }
