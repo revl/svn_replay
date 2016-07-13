@@ -32,13 +32,13 @@ The relative order of changesets coming from each particular
 repository is preserved though.
 
 Installation
-------------
+============
 
 No installation required: simply run `svn_replay.pl` from the root
 directory. A symbolic link to the script can be created if needed.
 
 Configuration
--------------
+=============
 
 The configuration file for `svn_replay` is a simple Perl script,
 which must end with a HASH definition.
@@ -47,22 +47,24 @@ Below is an example of a very basic configuration file.  It sets
 up replication of a single directory of one source repository to a
 directory inside the target repository.
 
-    {
-        SourceRepositories =>
-        [
-            {
-                RepoName => 'source_repo',
-                RootURL => 'https://svn.example.org/repos/source_repo',
-                PathMapping =>
-                [
-                    {
-                        SourcePath => 'path/in/source/repo',
-                        TargetPath => 'path/in/target/repo'
-                    }
-                ]
-            }
-        ]
-    }
+```perl
+{
+    SourceRepositories =>
+    [
+        {
+            RepoName => 'source_repo',
+            RootURL => 'https://svn.example.org/repos/source_repo',
+            PathMapping =>
+            [
+                {
+                    SourcePath => 'path/in/source/repo',
+                    TargetPath => 'path/in/target/repo'
+                }
+            ]
+        }
+    ]
+}
+```
 
 As can be seen from the example, the root configuration hash
 consists of a single key, `SourceRepositories`, and the value of
@@ -89,34 +91,37 @@ that hash are as follows:
 In the example below, trunks of two source repositories become
 sibling directories in the target repository:
 
-    {
-        SourceRepositories =>
-        [
-            {
-                RepoName => 'red_source_repo',
-                RootURL => 'https://svn/repos/red_repo',
-                PathMapping =>
-                [
-                    {
-                        SourcePath => 'trunk',
-                        TargetPath => 'trunk/colors/red'
-                    }
-                ] }
-        ],
-        [
-            {
-                RepoName => 'blue_source_repo',
-                RootURL => 'https://svn/repos/blue_repo',
-                PathMapping =>
-                [
-                    {
-                        SourcePath => 'trunk',
-                        TargetPath => 'trunk/colors/blue'
-                    }
-                ]
-            }
-        ]
-    }
+```perl
+{
+    SourceRepositories =>
+    [
+        {
+            RepoName => 'red_source_repo',
+            RootURL => 'https://svn/repos/red_repo',
+            PathMapping =>
+            [
+                {
+                    SourcePath => 'trunk',
+                    TargetPath => 'trunk/colors/red'
+                }
+            ]
+        }
+    ],
+    [
+        {
+            RepoName => 'blue_source_repo',
+            RootURL => 'https://svn/repos/blue_repo',
+            PathMapping =>
+            [
+                {
+                    SourcePath => 'trunk',
+                    TargetPath => 'trunk/colors/blue'
+                }
+            ]
+        }
+    ]
+}
+```
 
 Just like there can be multiple source repositories, there can be
 multiple `PathMapping` elements for each repository.  Here's an
@@ -124,47 +129,50 @@ example where pathnames of the `include` and `src` directories of
 a C library are rewritten so that the library has its own private
 directory.
 
-    {
-        SourceRepositories =>
-        [
-            {
-                RepoName => 'source_repo',
-                RootURL => 'https://svn.example.org/repos/source_repo',
-                PathMapping =>
-                [
-                    {
-                        SourcePath => 'trunk/include/mylib',
-                        TargetPath => 'trunk/mylib/include/mylib'
-                    },
-                    {
-                        SourcePath => 'trunk/src/mylib',
-                        TargetPath => 'trunk/mylib/src'
-                    }
-                ]
-            }
-        ]
-    }
+```perl
+{
+    SourceRepositories =>
+    [
+        {
+            RepoName => 'source_repo',
+            RootURL => 'https://svn.example.org/repos/source_repo',
+            PathMapping =>
+            [
+                {
+                    SourcePath => 'trunk/include/mylib',
+                    TargetPath => 'trunk/mylib/include/mylib'
+                },
+                {
+                    SourcePath => 'trunk/src/mylib',
+                    TargetPath => 'trunk/mylib/src'
+                }
+            ]
+        }
+    ]
+}
+```
+
+Optional Parameters
+-------------------
 
 Besides the three required keys (`RepoName`, `RootURL`, and
 `PathMapping`), the hash that describes a single source repository
-can contain the following optional keys:
+can also contain the following optional ones:
 
-- `StopAtRevision`: By default, all new revisions from a source
-  repository are replicated in the target repository.  This
-  parameter makes the replication process stop at a certain
-  revision number in the source repository (that is, the commit
-  history will be read up to the specified revision and the
-  specified revision will not be replicated). This parameter is
-  optional.
+- `StopAtRevision` makes the replication process stop at a certain
+  revision number in the source repository as opposed to HEAD. The
+  commit history will be read up to the specified revision and the
+  specified revision will not be replicated.
 
-- `DiscardSvnExternals`: Do not copy the svn:externals property
-  over to the target repository. This parameter is optional.  By
-  default, the svn:externals property is copied verbatim.
+- `DiscardSvnExternals` prescribes that the `svn:externals`
+  property must not be copied over to the target repository.
+  By default, the `svn:externals` property is copied verbatim.
 
-- `PreCommitHook`: Pre-commit hook is a Perl subroutine that is
-  called right before the target repository modifications are
-  committed. The commit is aborted if this subroutine returns
-  zero.  This parameter is optional.
+- `PreCommitHook` is a Perl subroutine that is called right before
+  the target repository modifications are committed. The commit is
+  aborted if this subroutine returns zero, in which case it's the
+  responsibility of the pre-commit hook to clean up the working
+  copy.
 
 TBC
 
