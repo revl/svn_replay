@@ -101,8 +101,7 @@ sibling directories in the target repository:
                         SourcePath => 'trunk',
                         TargetPath => 'trunk/colors/red'
                     }
-                ]
-            }
+                ] }
         ],
         [
             {
@@ -145,6 +144,27 @@ directory.
             }
         ]
     }
+
+Besides the three required keys (`RepoName`, `RootURL`, and
+`PathMapping`), the hash that describes a single source repository
+can contain the following optional keys:
+
+- `StopAtRevision`: By default, all new revisions from a source
+  repository are replicated in the target repository.  This
+  parameter makes the replication process stop at a certain
+  revision number in the source repository (that is, the commit
+  history will be read up to the specified revision and the
+  specified revision will not be replicated). This parameter is
+  optional.
+
+- `DiscardSvnExternals`: Do not copy the svn:externals property
+  over to the target repository. This parameter is optional.  By
+  default, the svn:externals property is copied verbatim.
+
+- `PreCommitHook`: Pre-commit hook is a Perl subroutine that is
+  called right before the target repository modifications are
+  committed. The commit is aborted if this subroutine returns
+  zero.  This parameter is optional.
 
 TBC
 
