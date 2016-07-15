@@ -63,8 +63,8 @@ use Getopt::Long qw(:config permute no_getopt_compat no_ignore_case);
 sub Help
 {
     print <<EOF;
-Usage: $ScriptName [-i REPO_PATH] <config_file> <target_working_copy>
-NCBI Subversion repository mirroring and restructuring tool.
+Usage: $ScriptName [-i TARGET_REPO_PATH] <CONF_FILE> <TARGET_WORKING_COPY>
+Subversion repository mirroring and restructuring tool.
 
   -i, --init=REPO_PATH          Create a new target repository
                                 and check out revision 0 into
