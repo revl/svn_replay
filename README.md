@@ -31,14 +31,17 @@ source repositories are sorted by their commit dates and times.
 The relative order of changesets coming from each particular
 repository is preserved though.
 
-Installation
-============
+How to Install
+==============
 
 No installation required: simply run `svn_replay.pl` from the root
 directory. A symbolic link to the script can be created if needed.
 
-Configuration
-=============
+The script has no CPAN dependencies; all modules that it uses are
+either bundled or come standard with Perl.
+
+How to Configure
+================
 
 The configuration file for `svn_replay` is a simple Perl script,
 which must end with a HASH definition.
@@ -174,7 +177,39 @@ can also contain the following optional ones:
   responsibility of the pre-commit hook to clean up the working
   copy.
 
-TBC
+For the most complete example of a configuration file, see the
+bundled `svn_replay.example.conf`.
+
+How to Run
+==========
+
+The script has two modes of operation, each described in its own
+chapter below.
+
+Target Repository Initialization
+--------------------------------
+
+    svn_replay.pl -i <TARGET_REPO_PATH> <CONF_FILE> <TARGET_WORKING_COPY>
+
+When given the `-i` option, `svn_replay` creates and initializes
+an empty target repository. In this mode, the configuration file
+and the source repositories are only used to set modification date
+for revision zero, which is chosen as the oldest modification date
+among revision zero of all source repositories.
+
+After the target repository has been created, it's checked out
+into the specified working copy directory, which must not exist.
+
+Incremental Replication
+-----------------------
+
+    svn_replay.pl <CONF_FILE> <TARGET_WORKING_COPY>
+
+This is the normal mode of operation. When the `-i` option is not
+specified, the script iterates over the source repositories to
+check for new revisions. If any new changes have been made since
+the last run in the configured source paths, those changes are
+replicated in the target repository.
 
 Disclaimer
 ----------
