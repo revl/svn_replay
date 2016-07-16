@@ -20,10 +20,10 @@ BEGIN
 
 use lib @LibDirs;
 
-use MockRepo;
+use SourceRepoMaker;
 
-my $MockRepo = MockRepo->new();
+my $SourceRepoMaker = SourceRepoMaker->new();
 
-ok(ref($MockRepo) eq 'MockRepo');
+ok(ref($SourceRepoMaker) eq 'SourceRepoMaker');
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab

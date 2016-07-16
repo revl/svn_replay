@@ -1,4 +1,4 @@
-package MockRepo;
+package SourceRepoMaker;
 
 sub new
 {
