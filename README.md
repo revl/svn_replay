@@ -163,8 +163,8 @@ can also contain the following optional ones:
 
 - `StopAtRevision` makes the replication process stop at a certain
   revision number in the source repository as opposed to HEAD. The
-  commit history will be read up to the specified revision and the
-  specified revision will not be replicated.
+  commit history will be read up to and including the specified
+  revision.
 
 - `DiscardSvnExternals` prescribes that the `svn:externals`
   property must not be copied over to the target repository.
