@@ -69,10 +69,9 @@ directory inside the target repository.
 }
 ```
 
-As can be seen from the example, the root configuration hash
-consists of a single key, `SourceRepositories`, and the value of
-this key is an array of hashes, each referring to a single source
-repository.
+The only required parameter in the root configuration hash is
+`SourceRepositories`. The value of this key is an array of hashes,
+each referring to a single source repository.
 
 The example above uses only one source repository and therefore
 its `SourceRepositories` array contains only one hash. The keys of
@@ -176,6 +175,12 @@ can also contain the following optional ones:
   aborted if this subroutine returns zero, in which case it's the
   responsibility of the pre-commit hook to clean up the working
   copy.
+
+The root hash can also contain the `CommitCredentials` key if the
+target repository requires authentication. The value of this key
+must be either a two-element array, in which case it's interpreted
+as a username-password pair, or a scalar, if only the username is
+needed.
 
 For the most complete example of a configuration file, see the
 bundled `svn_replay.example.conf`.
