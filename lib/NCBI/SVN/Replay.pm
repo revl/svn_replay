@@ -911,30 +911,7 @@ sub Run
         my $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(
             Conf => $SourceRepoConf, MyName => $Self->{MyName}, SVN => $SVN);
 
-        my $LastOriginalRev = 0;
-
-        for my $TargetPath (@{$SourceRepoConf->{TargetPaths}})
-        {
-            if (my $Info = $TargetPathInfo->{$TargetPath})
-            {
-                my $OriginalRevPropName = $SourceRepo->OriginalRevPropName();
-
-                my $OriginalRev = $SVN->ReadSubversionStream(
-                    qw(pg --revprop -r), $Info->{LastChangedRev},
-                        $OriginalRevPropName, $TargetPath);
-
-                chomp $OriginalRev;
-
-                unless ($OriginalRev)
-                {
-                    die "Property '$OriginalRevPropName' is not " .
-                        "set for revision $Info->{LastChangedRev}.\n"
-                }
-
-                $LastOriginalRev = $OriginalRev
-                    if $LastOriginalRev < $OriginalRev
-            }
-        }
+        my $LastOriginalRev = $SourceRepo->LastOriginalRev($TargetPathInfo);
 
         print "Reading what's new in '$SourceRepoConf->{RepoName}' " .
             "since revision $LastOriginalRev...\n";

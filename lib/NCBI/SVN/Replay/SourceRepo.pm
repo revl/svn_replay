@@ -27,7 +27,40 @@ use base qw(NCBI::SVN::Base);
 
 sub OriginalRevPropName()
 {
-    return 'orig-rev:' . $_[0]->{Conf}->{RepoName}
+    my ($Self) = @_;
+
+    return 'orig-rev:' . $Self->{Conf}->{RepoName}
+}
+
+sub LastOriginalRev()
+{
+    my ($Self, $TargetPathInfo) = @_;
+
+    my $LastOriginalRev = 0;
+
+    for my $TargetPath (@{$Self->{Conf}->{TargetPaths}})
+    {
+        if (my $Info = $TargetPathInfo->{$TargetPath})
+        {
+            my $OriginalRevPropName = $Self->OriginalRevPropName();
+
+            my $OriginalRev = $Self->{SVN}->ReadSubversionStream(
+                qw(pg --revprop -r), $Info->{LastChangedRev},
+                    $OriginalRevPropName, $TargetPath);
+
+            chomp $OriginalRev;
+
+            unless ($OriginalRev)
+            {
+                die "Property '$OriginalRevPropName' is not " .
+                    "set for revision $Info->{LastChangedRev}.\n"
+            }
+
+            $LastOriginalRev = $OriginalRev if $LastOriginalRev < $OriginalRev
+        }
+    }
+
+    return $LastOriginalRev
 }
 
 1
