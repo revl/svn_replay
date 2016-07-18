@@ -26,6 +26,7 @@ use warnings;
 use base qw(NCBI::SVN::Base);
 
 use NCBI::SVN::Replay::Conf;
+use NCBI::SVN::Replay::SourceRepo;
 
 use File::Find ();
 
@@ -509,7 +510,7 @@ sub BeginWorkingCopyChange
 {
     my ($Revision) = @_;
 
-    my $SourceRepoConf = $Revision->{SourceRepoConf};
+    my $SourceRepoConf = $Revision->{SourceRepo}->{Conf};
 
     unless ($Revision->{HasChangedWorkingCopy})
     {
@@ -538,8 +539,9 @@ sub ApplyRevisionChanges
 {
     my ($Self, $Revision) = @_;
 
-    my ($SourceRepoConf, $SourceRevisionNumber) =
-        @$Revision{qw(SourceRepoConf Number)};
+    my ($SourceRepo, $SourceRevisionNumber) = @$Revision{qw(SourceRepo Number)};
+
+    my $SourceRepoConf = $SourceRepo->{Conf};
 
     my ($RootURL, $SourcePathTree, $SourcePathToMapping) =
         @$SourceRepoConf{qw(RootURL SourcePathTree SourcePathToMapping)};
@@ -906,6 +908,9 @@ sub Run
 
     for my $SourceRepoConf (@{$Conf->{SourceRepositories}})
     {
+        my $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(
+            Conf => $SourceRepoConf, MyName => $Self->{MyName}, SVN => $SVN);
+
         my $LastOriginalRev = 0;
 
         for my $TargetPath (@{$SourceRepoConf->{TargetPaths}})
@@ -918,7 +923,7 @@ sub Run
 
                 chomp $OriginalRev;
 
-                if ($OriginalRev eq '')
+                unless ($OriginalRev)
                 {
                     die "Property '$OriginalRevPropName' is not " .
                         "set for revision $Info->{LastChangedRev}.\n"
@@ -948,7 +953,7 @@ sub Run
         {
             for my $Revision (@$Revisions)
             {
-                $Revision->{SourceRepoConf} = $SourceRepoConf
+                $Revision->{SourceRepo} = $SourceRepo
             }
 
             PushRevisionArray(\@RevisionArrayHeap, [reverse @$Revisions])
