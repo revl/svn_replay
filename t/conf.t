@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 16;
+use Test::More tests => 23;
 
 use File::Basename;
 use File::Spec;
@@ -51,6 +51,14 @@ push @SourceRepositories, \%RepoConf;
 eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(missing.*RepoName), 'Require RepoName');
 
+# Verify that invalid repository names are rejected.
+for my $InvalidRepoName (qw(-leading-dash .leading-dot bad+char 0digit))
+{
+    $RepoConf{RepoName} = $InvalidRepoName;
+    eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
+    like($@, qr(invalid repository name), 'Reject invalid RepoName');
+}
+
 $RepoConf{RepoName} = 'test_repo';
 
 # Verify that RootURL is required.
@@ -89,6 +97,14 @@ $OneMapping{TargetPath} = 'to/path';
 
 # Finally, the next call should succeed.
 my $Conf = NCBI::SVN::Replay::Conf->new(\%ConfHash);
+
+# Verify that valid repository names are accepted.
+for my $RepoName (qw(c c1 with:colon:-dash-_underscore_))
+{
+    $RepoConf{RepoName} = $RepoName;
+    eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
+    is($@, '', 'Accept valid RepoName');
+}
 
 # Make sure the correct class is instantiated.
 isa_ok($Conf, 'NCBI::SVN::Replay::Conf', '$Conf');

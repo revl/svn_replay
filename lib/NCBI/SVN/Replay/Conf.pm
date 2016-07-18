@@ -164,7 +164,13 @@ sub new
 
     for my $SourceRepoConf (@$SourceRepositories)
     {
-        RequireParam($SourceRepoConf, 'RepoName', $ConfFile);
+        my $RepoName = RequireParam($SourceRepoConf, 'RepoName', $ConfFile);
+
+        if ($RepoName !~ m/^[:A-Z_a-z][-.0-9:A-Z_a-z]*$/gso)
+        {
+            die "$ConfFile\: invalid repository name '$RepoName'\n"
+        }
+
         RequireParam($SourceRepoConf, 'RootURL', $ConfFile);
 
         my @SourcePaths;
