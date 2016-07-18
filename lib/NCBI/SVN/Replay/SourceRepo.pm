@@ -25,6 +25,11 @@ package NCBI::SVN::Replay::SourceRepo;
 
 use base qw(NCBI::SVN::Base);
 
+sub OriginalRevPropName()
+{
+    return 'orig-rev:' . $_[0]->{Conf}->{RepoName}
+}
+
 1
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab

@@ -30,13 +30,10 @@ use NCBI::SVN::Replay::SourceRepo;
 
 use File::Find ();
 
-my $CommitCredentials;
-my $OriginalRevPropName = 'ncbi:original-revision';
-
 my $LineContinuation = '  ... ';
 
 # Global variables
-my ($SVN, $TargetRepositoryURL);
+my ($SVN, $TargetRepositoryURL, $CommitCredentials);
 
 sub IsFile
 {
@@ -94,7 +91,7 @@ my $LogChunkSize = 100;
 
 sub FindTargetRevBySourceRev
 {
-    my ($SourceRevNumber) = @_;
+    my ($SourceRepo, $SourceRevNumber) = @_;
 
     my $TargetRevisions = $SVN->ReadLog('--limit',
         $LogChunkSize, $TargetRepositoryURL);
@@ -108,7 +105,8 @@ sub FindTargetRevBySourceRev
             $TargetRevNumber = $TargetRev->{Number};
 
             my $OriginalRev = $SVN->ReadSubversionStream(qw(pg --revprop -r),
-                $TargetRevNumber, $OriginalRevPropName, $TargetRepositoryURL);
+                $TargetRevNumber, $SourceRepo->OriginalRevPropName(),
+                $TargetRepositoryURL);
 
             die "Could not get original revision for $SourceRevNumber\n"
                 unless $OriginalRev;
@@ -635,7 +633,8 @@ sub ApplyRevisionChanges
                         $Action .= 'ByCopying';
                         push @Args, JoinPaths($TargetRepositoryURL,
                                 JoinPaths($CopyMapping->{TargetPath}, $RelativeCopyFromPath)),
-                            FindTargetRevBySourceRev($CopyFromRevInSourceRepo)
+                            FindTargetRevBySourceRev(
+                                $SourceRepo, $CopyFromRevInSourceRepo)
                     }
                     else
                     {
@@ -686,8 +685,8 @@ sub ApplyRevisionChanges
 
                 $CopyFromPathInSourceRepo =~ s/^\/+//so;
 
-                my $CopyFromRevInTargetRepo =
-                    FindTargetRevBySourceRev($CopyFromRevInSourceRepo);
+                my $CopyFromRevInTargetRepo = FindTargetRevBySourceRev(
+                    $SourceRepo, $CopyFromRevInSourceRepo);
 
                 for (@SourcePaths_ChildrenOfChangedPath)
                 {
@@ -813,7 +812,8 @@ sub ApplyRevisionChanges
             delete $RevProps->{'svn:log'};
             delete $RevProps->{'svn:author'} unless $CommitCredentials;
 
-            $RevProps->{$OriginalRevPropName} = $SourceRevisionNumber;
+            $RevProps->{$SourceRepo->OriginalRevPropName()} =
+                $SourceRevisionNumber;
 
             while (my ($Name, $Value) = each %$RevProps)
             {
@@ -917,6 +917,8 @@ sub Run
         {
             if (my $Info = $TargetPathInfo->{$TargetPath})
             {
+                my $OriginalRevPropName = $SourceRepo->OriginalRevPropName();
+
                 my $OriginalRev = $SVN->ReadSubversionStream(
                     qw(pg --revprop -r), $Info->{LastChangedRev},
                         $OriginalRevPropName, $TargetPath);
