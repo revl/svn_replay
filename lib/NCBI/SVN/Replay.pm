@@ -916,9 +916,9 @@ sub Run
         print "Reading what's new in '$SourceRepoConf->{RepoName}' " .
             "since revision $LastOriginalRev...\n";
 
-        my $Head = $SourceRepoConf->{StopAtRevision} || 'HEAD';
+        my $Head = $SourceRepo->HeadOrUndefIfSameHead();
 
-        my $Revisions = $SVN->ReadLog("-r$Head:$LastOriginalRev",
+        my $Revisions = $SVN->ReadLog("-r$Head\:$LastOriginalRev",
             $SourceRepoConf->{RootURL});
 
         if ($LastOriginalRev != 0)

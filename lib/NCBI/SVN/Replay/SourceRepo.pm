@@ -63,6 +63,25 @@ sub LastOriginalRev()
     return $LastOriginalRev
 }
 
+sub HeadOrUndefIfSameHead()
+{
+    my ($Self) = @_;
+
+    my $Conf = $Self->{Conf};
+
+    if ($Conf->{StopAtRevision})
+    {
+        return $Self->{Head} ? undef : $Self->{Head} = $Conf->{StopAtRevision}
+    }
+
+    my ($Info) = values %{$Self->{SVN}->ReadInfo($Conf->{RootURL})};
+
+    my $NewHead = $Info->{Revision};
+
+    return $Self->{Head} && $Self->{Head} eq $NewHead ?
+        undef : $Self->{Head} = $NewHead
+}
+
 1
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab
