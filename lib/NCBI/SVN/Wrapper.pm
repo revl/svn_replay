@@ -121,6 +121,8 @@ sub new
 
     my $Self = bless {@Params}, $Class;
 
+    $Self->{MyName} ||= $Class;
+
     $Self->{Windows} = 1 if $^O eq 'MSWin32' || $^O eq 'cygwin';
 
     $Self->FindSubversion() unless $Self->{SvnPathname};
