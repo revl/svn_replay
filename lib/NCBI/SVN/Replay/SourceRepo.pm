@@ -25,6 +25,17 @@ package NCBI::SVN::Replay::SourceRepo;
 
 use base qw(NCBI::SVN::Base);
 
+sub new()
+{
+    my $Class = shift;
+
+    my $Self = $Class->SUPER::new(@_);
+
+    die if not defined $Self->{Conf};
+
+    return $Self
+}
+
 sub OriginalRevPropName()
 {
     my ($Self) = @_;
@@ -69,17 +80,11 @@ sub HeadOrUndefIfSameHead()
 
     my $Conf = $Self->{Conf};
 
-    if ($Conf->{StopAtRevision})
-    {
-        return $Self->{Head} ? undef : $Self->{Head} = $Conf->{StopAtRevision}
-    }
-
-    my ($Info) = values %{$Self->{SVN}->ReadInfo($Conf->{RootURL})};
-
-    my $NewHead = $Info->{Revision};
+    my $NewHead = $Conf->{StopAtRevision} ||
+        [values %{$Self->{SVN}->ReadInfo($Conf->{RootURL})}]->[0]->{Revision};
 
     return $Self->{Head} && $Self->{Head} eq $NewHead ?
-        undef : $Self->{Head} = $NewHead
+        undef : ($Self->{Head} = $NewHead)
 }
 
 1
