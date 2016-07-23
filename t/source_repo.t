@@ -59,19 +59,18 @@ ok(ref($SourceRepo) eq 'NCBI::SVN::Replay::SourceRepo');
 
 is($SourceRepo->OriginalRevPropName(), 'orig-rev:test_repo', 'Orig-repo prop');
 
-# Test SourceRepo::HeadOrUndefIfSameHead()
-is($SourceRepo->HeadOrUndefIfSameHead(), 2, 'First call returns HEAD');
+# Test SourceRepo::UpdateHead()
+is($SourceRepo->UpdateHead(), 1, 'First call returns TRUE');
 
-is($SourceRepo->HeadOrUndefIfSameHead(), undef, 'Second call returns undef');
+is($SourceRepo->UpdateHead(), 0, 'Second call returns FALSE');
 
 $SourceRepoConf->{StopAtRevision} = 1;
 
 $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(%$SourceRepo);
 
-is($SourceRepo->HeadOrUndefIfSameHead(), 1,
-    'First call returns StopAtRevision');
+is($SourceRepo->UpdateHead(), 1, 'First call returns TRUE');
 
-is($SourceRepo->HeadOrUndefIfSameHead(), undef, 'Second call returns undef');
+is($SourceRepo->UpdateHead(), 0, 'Second call returns FALSE');
 
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab

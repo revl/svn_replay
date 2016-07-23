@@ -74,7 +74,7 @@ sub LastOriginalRev()
     return $LastOriginalRev
 }
 
-sub HeadOrUndefIfSameHead()
+sub UpdateHead()
 {
     my ($Self) = @_;
 
@@ -83,8 +83,11 @@ sub HeadOrUndefIfSameHead()
     my $NewHead = $Conf->{StopAtRevision} ||
         [values %{$Self->{SVN}->ReadInfo($Conf->{RootURL})}]->[0]->{Revision};
 
-    return $Self->{Head} && $Self->{Head} eq $NewHead ?
-        undef : ($Self->{Head} = $NewHead)
+    return 0 if $Self->{Head} && $Self->{Head} eq $NewHead;
+
+    $Self->{Head} = $NewHead;
+
+    return 1
 }
 
 1

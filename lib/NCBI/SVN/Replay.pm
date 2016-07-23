@@ -906,17 +906,45 @@ sub Run
 
     my @RevisionArrayHeap;
 
+    my @SourceRepos;
+
     for my $SourceRepoConf (@{$Conf->{SourceRepositories}})
     {
-        my $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(
-            Conf => $SourceRepoConf, MyName => $Self->{MyName}, SVN => $SVN);
+        push @SourceRepos, NCBI::SVN::Replay::SourceRepo->new(
+            Conf => $SourceRepoConf, MyName => $Self->{MyName}, SVN => $SVN)
+    }
+
+    if (@SourceRepos > 1)
+    {
+        # Iterate over source repositories in a circular way to get
+        # HEAD revisions that are consistent with each other.
+        my $RepoIndex = 0;
+        my $StableHeadCount;
+
+        do
+        {
+            $SourceRepos[$RepoIndex]->UpdateHead() ?
+                $StableHeadCount = 0 : ++$StableHeadCount;
+
+            $RepoIndex = ($RepoIndex + 1) % @SourceRepos
+        }
+        while ($StableHeadCount != @SourceRepos)
+    }
+    else
+    {
+        $SourceRepos[0]->UpdateHead()
+    }
+
+    for my $SourceRepo (@SourceRepos)
+    {
+        my $SourceRepoConf = $SourceRepo->{Conf};
 
         my $LastOriginalRev = $SourceRepo->LastOriginalRev($TargetPathInfo);
 
         print "Reading what's new in '$SourceRepoConf->{RepoName}' " .
             "since revision $LastOriginalRev...\n";
 
-        my $Head = $SourceRepo->HeadOrUndefIfSameHead();
+        my $Head = $SourceRepo->{Head};
 
         my $Revisions = $SVN->ReadLog("-r$Head\:$LastOriginalRev",
             $SourceRepoConf->{RootURL});
