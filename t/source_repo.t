@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 8;
+use Test::More tests => 6;
 
 use File::Basename;
 use File::Spec;
@@ -52,25 +52,22 @@ my $SourceRepoConf =
     ]
 };
 
-my $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(Conf => $SourceRepoConf,
+my $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(
+    Conf => $SourceRepoConf, TargetPathInfo => {},
     MyName => basename($0), SVN => $TestRepoMaker->{SVN});
 
 ok(ref($SourceRepo) eq 'NCBI::SVN::Replay::SourceRepo');
 
 is($SourceRepo->OriginalRevPropName(), 'orig-rev:test_repo', 'Orig-repo prop');
 
-# Test SourceRepo::UpdateHead()
-is($SourceRepo->UpdateHead(), 1, 'First call returns TRUE');
-
-is($SourceRepo->UpdateHead(), 0, 'Second call returns FALSE');
+# Test SourceRepo::UpdateHeadRev()
+is($SourceRepo->UpdateHeadRev(), 0, 'No changes since new()');
 
 $SourceRepoConf->{StopAtRevision} = 1;
 
 $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(%$SourceRepo);
 
-is($SourceRepo->UpdateHead(), 1, 'First call returns TRUE');
-
-is($SourceRepo->UpdateHead(), 0, 'Second call returns FALSE');
+is($SourceRepo->UpdateHeadRev(), 0, 'No changes');
 
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab
