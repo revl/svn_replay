@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 6;
+use Test::More tests => 7;
 
 use File::Basename;
 use File::Spec;
@@ -34,7 +34,7 @@ ok(ref($TestRepoMaker) eq 'TestRepoMaker');
 my $FilePath = $TestRepoMaker->Put('a/b/c/hello.txt', "Hello, World!\n");
 $TestRepoMaker->Commit('Add hello.txt');
 
-$TestRepoMaker->Put('a/b/c/hello.txt', "Hello!\n");
+$TestRepoMaker->Put('a/b/c/hello.txt', "Hello, Weird!\n");
 $TestRepoMaker->Commit('Update hello.txt');
 
 ok(-e $FilePath);
@@ -63,11 +63,18 @@ is($SourceRepo->OriginalRevPropName(), 'orig-rev:test_repo', 'Orig-repo prop');
 # Test SourceRepo::UpdateHeadRev()
 is($SourceRepo->UpdateHeadRev(), 0, 'No changes since new()');
 
+$TestRepoMaker->Put('a/b/c/hello.txt', "Hello again!\n");
+$TestRepoMaker->Commit('Update hello.txt');
+
+is($SourceRepo->UpdateHeadRev(), 1, 'New HEAD revision');
+
 $SourceRepoConf->{StopAtRevision} = 1;
 
 $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(%$SourceRepo);
 
-is($SourceRepo->UpdateHeadRev(), 0, 'No changes');
+$TestRepoMaker->Put('a/b/c/hello.txt', "Hi!\n");
+$TestRepoMaker->Commit('Update hello.txt');
 
+is($SourceRepo->UpdateHeadRev(), 0, 'StopAtRevision is unaffected by changes');
 
 # vim: filetype=perl tabstop=4 shiftwidth=4 softtabstop=4 expandtab
