@@ -27,10 +27,9 @@ use base qw(NCBI::SVN::Base);
 
 use NCBI::SVN::Replay::Conf;
 use NCBI::SVN::Replay::SourceRepo;
+use NCBI::SVN::Replay::RevisionQueue;
 
 use File::Find ();
-
-my $LineContinuation = '  ... ';
 
 # Global variables
 my ($SVN, $TargetRepositoryURL, $CommitCredentials);
@@ -55,7 +54,7 @@ sub Copy
 
     my $URLAndRev = $CopyFromURLInTargetRepo . '@' . $CopyFromRevInTargetRepo;
 
-    print $LineContinuation . "cp $URLAndRev $TargetPathname\n";
+    print "  ... cp $URLAndRev $TargetPathname\n";
 
     $SVN->RunSubversion('cp', $URLAndRev, $TargetPathname);
 }
@@ -66,7 +65,7 @@ sub Export
 
     $SourceURL .= '@' . $RevisionNumber;
 
-    print $LineContinuation . 'export --ignore-externals --force -q ' .
+    print '  ... export --ignore-externals --force -q ' .
         "$SourceURL $TargetPathname\n";
 
     $SVN->RunSubversion(qw(export --ignore-externals --force -q),
@@ -831,56 +830,6 @@ sub ApplyRevisionChanges
     return $Revision->{HasChangedWorkingCopy}
 }
 
-sub IsNewer
-{
-    my ($Heap, $Index1, $Index2) = @_;
-
-    return $Heap->[$Index1]->[0]->{Time} gt $Heap->[$Index2]->[0]->{Time}
-}
-
-sub PushRevisionArray
-{
-    my ($Heap, $RevisionArray) = @_;
-
-    push @$Heap, $RevisionArray;
-
-    my $Parent;
-    my $Child = $#$Heap;
-
-    while ($Child > 0 && IsNewer($Heap, $Parent = $Child >> 1, $Child))
-    {
-        @$Heap[$Parent, $Child] = @$Heap[$Child, $Parent];
-        $Child = $Parent
-    }
-}
-
-sub PopRevisionArray
-{
-    my ($Heap) = @_;
-
-    if (@$Heap > 1)
-    {
-        my $Child = 0;
-        my $Parent = $#$Heap;
-        my $NewSize = $Parent - 1;
-
-        do
-        {
-            @$Heap[$Parent, $Child] = @$Heap[$Child, $Parent];
-
-            $Parent = $Child;
-            $Child <<= 1;
-
-            return pop @$Heap if $Child > $NewSize;
-
-            ++$Child if $Child < $NewSize && IsNewer($Heap, $Child, $Child + 1)
-        }
-        while (IsNewer($Heap, $Parent, $Child))
-    }
-
-    return pop @$Heap
-}
-
 sub Run
 {
     my ($Self, $Conf, $TargetWorkingCopy) = @_;
@@ -904,14 +853,13 @@ sub Run
 
     $TargetRepositoryURL = $TargetPathInfo->{'.'}->{Root};
 
-    my @RevisionArrayHeap;
-
     my @SourceRepos;
 
     for my $SourceRepoConf (@{$Conf->{SourceRepositories}})
     {
         push @SourceRepos, NCBI::SVN::Replay::SourceRepo->new(
-            Conf => $SourceRepoConf, MyName => $Self->{MyName}, SVN => $SVN)
+            Conf => $SourceRepoConf, TargetPathInfo => $TargetPathInfo,
+            MyName => $Self->{MyName}, SVN => $SVN)
     }
 
     if (@SourceRepos > 1)
@@ -923,65 +871,33 @@ sub Run
 
         do
         {
-            $SourceRepos[$RepoIndex]->UpdateHead() ?
+            $SourceRepos[$RepoIndex]->UpdateHeadRev() ?
                 $StableHeadCount = 0 : ++$StableHeadCount;
 
             $RepoIndex = ($RepoIndex + 1) % @SourceRepos
         }
         while ($StableHeadCount != @SourceRepos)
     }
-    else
-    {
-        $SourceRepos[0]->UpdateHead()
-    }
 
-    for my $SourceRepo (@SourceRepos)
-    {
-        my $SourceRepoConf = $SourceRepo->{Conf};
+    my $RevisionQueue = NCBI::SVN::Replay::RevisionQueue->new(
+        SourceRepos => \@SourceRepos, MyName => $Self->{MyName}, SVN => $SVN);
 
-        my $LastOriginalRev = $SourceRepo->LastOriginalRev($TargetPathInfo);
+    my $Revision = $RevisionQueue->NextOldestRevision();
 
-        print "Reading what's new in '$SourceRepoConf->{RepoName}' " .
-            "since revision $LastOriginalRev...\n";
-
-        my $Head = $SourceRepo->{Head};
-
-        my $Revisions = $SVN->ReadLog("-r$Head\:$LastOriginalRev",
-            $SourceRepoConf->{RootURL});
-
-        if ($LastOriginalRev != 0)
-        {
-            pop(@$Revisions)->{Number} == $LastOriginalRev or die 'Logic error'
-        }
-
-        print $LineContinuation . scalar(@$Revisions) . " new revisions.\n";
-
-        if (@$Revisions)
-        {
-            for my $Revision (@$Revisions)
-            {
-                $Revision->{SourceRepo} = $SourceRepo
-            }
-
-            PushRevisionArray(\@RevisionArrayHeap, [reverse @$Revisions])
-        }
-    }
-
-    return 0 unless @RevisionArrayHeap;
+    return 0 unless $Revision;
 
     print "Applying new revision changes...\n";
 
     my $ChangesApplied = 0;
 
-    while (my $Revisions = PopRevisionArray(\@RevisionArrayHeap))
+    do
     {
-        $ChangesApplied += $Self->ApplyRevisionChanges(shift @$Revisions);
-
-        PushRevisionArray(\@RevisionArrayHeap, $Revisions) if @$Revisions
+        $ChangesApplied += $Self->ApplyRevisionChanges($Revision)
     }
+    while ($Revision = $RevisionQueue->NextOldestRevision());
 
-    print $LineContinuation . ($ChangesApplied ?
-        "$ChangesApplied change(s) applied.\n" : "no relevant changes.\n");
+    print $ChangesApplied ?  "  ... $ChangesApplied change(s) applied.\n" :
+        "  ... no relevant changes.\n";
 
     return 0
 }

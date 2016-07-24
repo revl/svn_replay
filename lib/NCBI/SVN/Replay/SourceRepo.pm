@@ -25,69 +25,107 @@ package NCBI::SVN::Replay::SourceRepo;
 
 use base qw(NCBI::SVN::Base);
 
-sub new()
+sub new
 {
     my $Class = shift;
 
     my $Self = $Class->SUPER::new(@_);
 
-    die if not defined $Self->{Conf};
+    die if not defined $Self->{Conf} or not defined $Self->{TargetPathInfo};
+
+    $Self->{LastSyncedRev} = $Self->LastSyncedRev();
+    $Self->{HeadRev} = $Self->CurrentHeadRev();
+
+    my $Conf = $Self->{Conf};
+
+    my $LastSyncedRev = $Self->{LastSyncedRev};
+
+    print "Reading what's new in '$Conf->{RepoName}' " .
+        "since revision $LastSyncedRev...\n";
+
+    my $HeadRev = $Self->{HeadRev};
+
+    my $Revisions = $Self->{SVN}->ReadLog("-r$HeadRev\:$LastSyncedRev",
+        $Conf->{RootURL});
+
+    if ($LastSyncedRev != 0)
+    {
+        pop(@$Revisions)->{Number} == $LastSyncedRev or die 'Logic error'
+    }
+
+    print '  ... ' . scalar(@$Revisions) . " new revisions.\n";
+
+    $Self->{Revisions} = [reverse @$Revisions];
 
     return $Self
 }
 
-sub OriginalRevPropName()
+sub OriginalRevPropName
 {
     my ($Self) = @_;
 
     return 'orig-rev:' . $Self->{Conf}->{RepoName}
 }
 
-sub LastOriginalRev()
+sub LastSyncedRev
 {
-    my ($Self, $TargetPathInfo) = @_;
+    my ($Self) = @_;
 
-    my $LastOriginalRev = 0;
+    my $LastSyncedRev = 0;
 
     for my $TargetPath (@{$Self->{Conf}->{TargetPaths}})
     {
-        if (my $Info = $TargetPathInfo->{$TargetPath})
+        if (my $Info = $Self->{TargetPathInfo}->{$TargetPath})
         {
             my $OriginalRevPropName = $Self->OriginalRevPropName();
 
-            my $OriginalRev = $Self->{SVN}->ReadSubversionStream(
+            my $SyncedRev = $Self->{SVN}->ReadSubversionStream(
                 qw(pg --revprop -r), $Info->{LastChangedRev},
                     $OriginalRevPropName, $TargetPath);
 
-            chomp $OriginalRev;
+            chomp $SyncedRev;
 
-            unless ($OriginalRev)
+            unless ($SyncedRev)
             {
                 die "Property '$OriginalRevPropName' is not " .
                     "set for revision $Info->{LastChangedRev}.\n"
             }
 
-            $LastOriginalRev = $OriginalRev if $LastOriginalRev < $OriginalRev
+            $LastSyncedRev = $SyncedRev if $LastSyncedRev < $SyncedRev
         }
     }
 
-    return $LastOriginalRev
+    return $LastSyncedRev
 }
 
-sub UpdateHead()
+sub CurrentHeadRev
 {
     my ($Self) = @_;
 
     my $Conf = $Self->{Conf};
 
-    my $NewHead = $Conf->{StopAtRevision} ||
-        [values %{$Self->{SVN}->ReadInfo($Conf->{RootURL})}]->[0]->{Revision};
+    return $Conf->{StopAtRevision} ||
+        [values %{$Self->{SVN}->ReadInfo($Conf->{RootURL})}]->[0]->{Revision}
+}
 
-    return 0 if $Self->{Head} && $Self->{Head} eq $NewHead;
+sub UpdateHeadRev
+{
+    my ($Self) = @_;
 
-    $Self->{Head} = $NewHead;
+    my $NewHeadRev = $Self->CurrentHeadRev();
+
+    return 0 if $Self->{HeadRev} && $Self->{HeadRev} eq $NewHeadRev;
+
+    $Self->{HeadRev} = $NewHeadRev;
 
     return 1
+}
+
+sub NextRevision
+{
+    my ($Self) = @_;
+
+    return shift @{$Self->{Revisions}}
 }
 
 1
