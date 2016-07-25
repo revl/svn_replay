@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-package TestRepoMaker;
+package TestRepo;
 
 use base qw(NCBI::SVN::Base);
 
