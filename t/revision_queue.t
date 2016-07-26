@@ -77,7 +77,7 @@ sub CreateRevisionAndSetTime
 
 my $Year = 2020;
 
-my @CommitOrder = (1, 0, 1, 0, 2, 2, 0, 1, 1, 2);
+my @CommitOrder = (1, 0, 2, 2, 0, 1, 1, 2);
 
 for my $RepoIndex (@CommitOrder)
 {
