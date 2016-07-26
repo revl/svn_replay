@@ -80,7 +80,19 @@ sub Commit
 {
     my ($Self, $Message) = @_;
 
-    $Self->{SVN}->RunSubversion('commit', '-m', $Message, $Self->{CheckoutPath})
+    my $Stream = $Self->{SVN}->Run('commit', '-m', $Message,
+        $Self->{CheckoutPath});
+
+    my $Line;
+    my $Revision;
+
+    while (defined($Line = $Stream->ReadLine()))
+    {
+        print "$Line\n";
+        ($Revision) = $Line =~ m/revision (\d+)/so
+    }
+
+    return $Revision
 }
 
 1
