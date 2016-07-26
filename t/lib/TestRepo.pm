@@ -24,6 +24,12 @@ sub new
 
     $SVN->RunOrDie(qw(svnadmin create), $RepoPath);
 
+    my $Hook = "$RepoPath/hooks/pre-revprop-change";
+    open FILE, '>', $Hook or die;
+    print FILE "#!/bin/sh\nexit 0\n" or die;
+    close FILE;
+    chmod 0755, $Hook or die;
+
     my $RepoURL = $Self->{RepoURL} = 'file://' . $RepoPath;
 
     my $CheckoutPath = $Self->{CheckoutPath} =

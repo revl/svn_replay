@@ -29,7 +29,7 @@ sub IsNewer
 {
     my ($Heap, $Index1, $Index2) = @_;
 
-    return $Heap->[$Index1]->[0]->{Time} gt $Heap->[$Index2]->[0]->{Time}
+    return $Heap->[$Index1]->{Time} gt $Heap->[$Index2]->{Time}
 }
 
 sub InsertRevision
