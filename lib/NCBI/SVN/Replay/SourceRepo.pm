@@ -35,27 +35,8 @@ sub new
 
     $Self->{LastSyncedRev} = $Self->LastSyncedRev();
     $Self->{HeadRev} = $Self->CurrentHeadRev();
-
-    my $Conf = $Self->{Conf};
-
-    my $LastSyncedRev = $Self->{LastSyncedRev};
-
-    print "Reading what's new in '$Conf->{RepoName}' " .
-        "since revision $LastSyncedRev...\n";
-
-    my $HeadRev = $Self->{HeadRev};
-
-    my $Revisions = $Self->{SVN}->ReadLog("-r$HeadRev\:$LastSyncedRev",
-        $Conf->{RootURL});
-
-    if ($LastSyncedRev != 0)
-    {
-        pop(@$Revisions)->{Number} == $LastSyncedRev or die 'Logic error'
-    }
-
-    print '  ... ' . scalar(@$Revisions) . " new revisions.\n";
-
-    $Self->{Revisions} = [reverse @$Revisions];
+    $Self->{RevisionBuffer} = [];
+    $Self->{MaxBufferSize} ||= 1000;
 
     return $Self
 }
@@ -125,7 +106,37 @@ sub NextRevision
 {
     my ($Self) = @_;
 
-    return shift @{$Self->{Revisions}}
+    my $RevisionBuffer = $Self->{RevisionBuffer};
+
+    if (!@$RevisionBuffer)
+    {
+        my $LastSyncedRev = $Self->{LastSyncedRev};
+        my $HeadRev = $Self->{HeadRev};
+
+        my $NewRevs = $HeadRev - $LastSyncedRev;
+
+        return undef if $NewRevs <= 0;
+
+        my $BufferSize = $Self->{MaxBufferSize};
+
+        $BufferSize = $NewRevs if $BufferSize > $NewRevs;
+
+        my $Conf = $Self->{Conf};
+
+        print "Reading $BufferSize " .
+            ($BufferSize == 1 ? 'revision' : 'revisions') .
+            " since r$LastSyncedRev from '$Conf->{RepoName}'...\n";
+
+        my $LastRevInBuffer = $LastSyncedRev + $BufferSize;
+
+        $RevisionBuffer = $Self->{SVN}->ReadLog('-r' .
+            ($LastSyncedRev + 1) . ':' . $LastRevInBuffer, $Conf->{RootURL});
+
+        $Self->{RevisionBuffer} = $RevisionBuffer;
+        $Self->{LastSyncedRev} = $LastRevInBuffer
+    }
+
+    return shift @$RevisionBuffer
 }
 
 1

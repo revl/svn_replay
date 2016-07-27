@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 use File::Basename;
 use File::Spec;
@@ -57,6 +57,8 @@ my $SourceRepo = NCBI::SVN::Replay::SourceRepo->new(
     MyName => basename($0), SVN => $TestRepo->{SVN});
 
 ok(ref($SourceRepo) eq 'NCBI::SVN::Replay::SourceRepo');
+
+is($SourceRepo->{MaxBufferSize}, 1000, 'MaxBufferSize default');
 
 is($SourceRepo->OriginalRevPropName(), 'orig-rev:test_repo', 'Orig-repo prop');
 

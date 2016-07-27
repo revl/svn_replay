@@ -58,7 +58,9 @@ for my $TestRepo (@TestRepos)
                     TargetPath => $FileName . '_' . $RepoIndex
                 }
             ]
-        }
+        };
+
+    ++$RepoIndex
 }
 
 my $NextNumber = 0;
@@ -87,11 +89,13 @@ for my $RepoIndex (@CommitOrder)
 }
 
 my @SourceRepos;
+my $MaxBufferSize = 0;
 
 for my $SourceRepoConf (@SourceRepoConf)
 {
     push @SourceRepos, NCBI::SVN::Replay::SourceRepo->new(
         Conf => $SourceRepoConf, TargetPathInfo => {},
+        MaxBufferSize => ++$MaxBufferSize,
         %$SVNBase)
 }
 
