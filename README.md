@@ -174,7 +174,7 @@ can also contain the following optional ones:
   the target repository modifications are committed. The commit is
   aborted if this subroutine returns zero, in which case it's the
   responsibility of the pre-commit subroutine to clean up the
-  working copy.
+  working copy (revert all changes made by `svn_replay`).
 
 The root hash can also contain the `CommitCredentials` key if the
 target repository requires authentication. The value of this key
