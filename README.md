@@ -173,8 +173,8 @@ can also contain the following optional ones:
 - `PreCommitHook` is a Perl subroutine that is called right before
   the target repository modifications are committed. The commit is
   aborted if this subroutine returns zero, in which case it's the
-  responsibility of the pre-commit hook to clean up the working
-  copy.
+  responsibility of the pre-commit subroutine to clean up the
+  working copy.
 
 The root hash can also contain the `CommitCredentials` key if the
 target repository requires authentication. The value of this key
@@ -216,8 +216,14 @@ check for new revisions. If any new changes have been made since
 the last run in the configured source paths, those changes are
 replicated in the target repository.
 
+The script logs information about its progress to the standard
+output. To save this log to a file, use shell redirection:
+
+    svn_replay.pl my.conf workdir >> svn_replay.log
+    # or: svn_replay.pl my.conf workdir | tee -a svn_replay.log
+
 Disclaimer
-----------
+==========
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
