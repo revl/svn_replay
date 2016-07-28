@@ -222,6 +222,13 @@ output. To save this log to a file, use shell redirection:
     svn_replay.pl my.conf workdir >> svn_replay.log
     # or: svn_replay.pl my.conf workdir | tee -a svn_replay.log
 
+Limitations
+===========
+
+`svn_replay` cannot clone the entire source repository unless all
+top-level directories of that repository are listed in the
+`PathMapping` configuration section.
+
 Disclaimer
 ==========
 
