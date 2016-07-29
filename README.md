@@ -225,9 +225,14 @@ output. To save this log to a file, use shell redirection:
 Limitations
 ===========
 
-`svn_replay` cannot clone the entire source repository unless all
-top-level directories of that repository are listed in the
-`PathMapping` configuration section.
+- `svn_replay` cannot clone the entire source repository unless
+  all top-level directories of that repository are listed in the
+  `PathMapping` configuration section.
+
+- The employed path mapping scheme is not flexible enough to
+  describe arbitrary repository restructuring, but the desired
+  effect can sometimes be achieved by applying a chain of
+  `svn_replay` transformations.
 
 Disclaimer
 ==========
