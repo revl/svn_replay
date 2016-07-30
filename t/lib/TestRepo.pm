@@ -89,6 +89,31 @@ sub Put
     return $FilePath
 }
 
+sub Delete
+{
+    my ($Self, $FilePath) = @_;
+
+    $FilePath = $Self->{WorkingCopyPath} . '/' . $FilePath;
+
+    $Self->{SVN}->RunSubversion('delete', $FilePath) unless -e $FilePath;
+
+    return $FilePath
+}
+
+sub Copy
+{
+    my ($Self, $FromPath, $ToPath) = @_;
+
+    $Self->CreateMissingDirs($ToPath);
+
+    $FromPath = $Self->{WorkingCopyPath} . '/' . $FromPath;
+    $ToPath = $Self->Delete($ToPath);
+
+    $Self->{SVN}->RunSubversion('copy', $FromPath, $ToPath);
+
+    return $ToPath
+}
+
 sub Commit
 {
     my ($Self, $Message) = @_;
