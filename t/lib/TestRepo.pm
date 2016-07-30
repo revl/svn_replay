@@ -40,9 +40,9 @@ sub new
     return $Self
 }
 
-sub Put
+sub CreateMissingDirs
 {
-    my ($Self, $FilePath, $FileContents) = @_;
+    my ($Self, $FilePath) = @_;
 
     my $SVN = $Self->{SVN};
 
@@ -68,6 +68,13 @@ sub Put
             last
         }
     }
+}
+
+sub Put
+{
+    my ($Self, $FilePath, $FileContents) = @_;
+
+    $Self->CreateMissingDirs($FilePath);
 
     $FilePath = $Self->{WorkingCopyPath} . '/' . $FilePath;
 
