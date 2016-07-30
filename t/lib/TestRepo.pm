@@ -18,7 +18,7 @@ sub new
     die if not defined $ParentDir;
 
     my $RepoPath = $Self->{RepoPath} =
-        tempdir('repoXXXXXX', DIR => $ParentDir);
+        tempdir('source_repo_XXXXXX', DIR => $ParentDir);
 
     my $SVN = $Self->{SVN};
 
@@ -33,7 +33,7 @@ sub new
     my $RepoURL = $Self->{RepoURL} = 'file://' . $RepoPath;
 
     my $CheckoutPath = $Self->{CheckoutPath} =
-        File::Temp::tempnam($ParentDir, 'checkoutXXXXXX');
+        File::Temp::tempnam($ParentDir, 'source_wd_XXXXXX');
 
     $SVN->RunSubversion('checkout', $RepoURL, $CheckoutPath);
 
