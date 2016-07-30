@@ -32,10 +32,10 @@ sub new
 
     my $RepoURL = $Self->{RepoURL} = 'file://' . $RepoPath;
 
-    my $CheckoutPath = $Self->{CheckoutPath} =
+    my $WorkingCopyPath = $Self->{WorkingCopyPath} =
         File::Temp::tempnam($ParentDir, 'source_wd_XXXXXX');
 
-    $SVN->RunSubversion('checkout', $RepoURL, $CheckoutPath);
+    $SVN->RunSubversion('checkout', $RepoURL, $WorkingCopyPath);
 
     return $Self
 }
@@ -46,7 +46,7 @@ sub Put
 
     my $SVN = $Self->{SVN};
 
-    my $DirPath = $Self->{CheckoutPath};
+    my $DirPath = $Self->{WorkingCopyPath};
 
     my @Subdirs = split('/', $FilePath);
     pop @Subdirs;
@@ -69,7 +69,7 @@ sub Put
         }
     }
 
-    $FilePath = $Self->{CheckoutPath} . '/' . $FilePath;
+    $FilePath = $Self->{WorkingCopyPath} . '/' . $FilePath;
 
     my $FileExisted = -e $FilePath;
 
@@ -87,7 +87,7 @@ sub Commit
     my ($Self, $Message) = @_;
 
     my $Stream = $Self->{SVN}->Run('commit', '-m', $Message,
-        $Self->{CheckoutPath});
+        $Self->{WorkingCopyPath});
 
     my $Line;
     my $Revision;
