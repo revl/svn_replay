@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More tests => 8;
 
 use File::Basename;
 use File::Spec;
@@ -44,8 +44,12 @@ my $Conf = NCBI::SVN::Replay::Conf->new(
                 PathMapping =>
                 [
                     {
-                        SourcePath => 'trunk/orange/red',
-                        TargetPath => 'red'
+                        SourcePath => 'trunk/outer/inner',
+                        TargetPath => 'trunk/inner'
+                    },
+                    {
+                        SourcePath => 'branches/feat/outer/inner',
+                        TargetPath => 'branches/feat/inner'
                     }
                 ]
             }
@@ -60,8 +64,7 @@ my $Init = NCBI::SVN::Replay::Init->new(
 
 $Init->Run($Conf, $TargetWorkingCopy, $TargetRepoPath);
 
-$TestRepo->Put('trunk/orange/yellow/file_1.txt', "file_1\n");
-$TestRepo->Put('trunk/orange/red/file_2.txt', "file_2\n");
+$TestRepo->Put('trunk/outer/inner/file_1.txt', "file_1\n");
 $TestRepo->Commit('Initial commit');
 
 my $Replay = NCBI::SVN::Replay->new(%$Init);
@@ -70,9 +73,34 @@ ok(ref($Replay) eq 'NCBI::SVN::Replay');
 
 $Replay->Run($Conf, $TargetWorkingCopy);
 
-ok(-d "$TargetWorkingCopy/red", 'Selected directory exists');
+ok(-f "$TargetWorkingCopy/trunk/inner/file_1.txt");
 
-ok(!-d "$TargetWorkingCopy/yellow", 'Skipped directory does not exist');
+ok(!-e "$TargetWorkingCopy/branches");
+
+$TestRepo->Copy('trunk', 'branches/feat');
+$TestRepo->Commit('Create branch "feat"');
+
+$Replay->Run($Conf, $TargetWorkingCopy);
+
+ok(-f "$TargetWorkingCopy/branches/feat/inner/file_1.txt");
+
+$TestRepo->Delete('branches/feat');
+$TestRepo->Commit('Delete branch "feat"');
+
+$Replay->Run($Conf, $TargetWorkingCopy);
+
+ok(-d "$TargetWorkingCopy/branches/feat");
+ok(!-e "$TargetWorkingCopy/branches/feat/inner");
+
+$TestRepo->Put('trunk/new_outer/inner/file_2.txt', "file_2\n");
+$TestRepo->Commit('Create a new version of "outer"');
+$TestRepo->Move('trunk/new_outer', 'trunk/outer');
+$TestRepo->Commit('New version of "inner", indirectly');
+
+$Replay->Run($Conf, $TargetWorkingCopy);
+
+ok(-f "$TargetWorkingCopy/trunk/inner/file_2.txt");
+ok(!-e "$TargetWorkingCopy/trunk/inner/file_1.txt");
 
 chdir $OrigCurrDir;
 

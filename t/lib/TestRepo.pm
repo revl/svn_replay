@@ -95,7 +95,7 @@ sub Delete
 
     $FilePath = $Self->{WorkingCopyPath} . '/' . $FilePath;
 
-    $Self->{SVN}->RunSubversion('delete', $FilePath) unless -e $FilePath;
+    $Self->{SVN}->RunSubversion('delete', $FilePath) if -e $FilePath;
 
     return $FilePath
 }
@@ -110,6 +110,20 @@ sub Copy
     $ToPath = $Self->Delete($ToPath);
 
     $Self->{SVN}->RunSubversion('copy', $FromPath, $ToPath);
+
+    return $ToPath
+}
+
+sub Move
+{
+    my ($Self, $FromPath, $ToPath) = @_;
+
+    $Self->CreateMissingDirs($ToPath);
+
+    $FromPath = $Self->{WorkingCopyPath} . '/' . $FromPath;
+    $ToPath = $Self->Delete($ToPath);
+
+    $Self->{SVN}->RunSubversion('move', $FromPath, $ToPath);
 
     return $ToPath
 }
