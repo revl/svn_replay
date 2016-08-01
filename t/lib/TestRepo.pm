@@ -144,6 +144,8 @@ sub Commit
         ($Revision) = $Line =~ m/revision (\d+)/so
     }
 
+    $Self->{SVN}->RunSubversion('update', $Self->{WorkingCopyPath});
+
     return $Revision
 }
 
