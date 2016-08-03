@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 12;
+use Test::More tests => 15;
 
 use File::Basename;
 use File::Spec;
@@ -59,6 +59,18 @@ my $Conf = NCBI::SVN::Replay::Conf->new(
 my $TargetRepoPath = File::Temp::tempnam($TmpDir, 'target_repo_XXXXXX');
 my $TargetWorkingCopy = File::Temp::tempnam($TmpDir, 'target_wd_XXXXXX');
 
+sub ReadFirstLine
+{
+    my ($FilePath) = @_;
+
+    open FILE, '<', "$TargetWorkingCopy/$FilePath" or die "$FilePath\: $!";
+    my $FirstLine = <FILE>;
+    close FILE;
+
+    chomp $FirstLine;
+    return $FirstLine
+}
+
 my $Init = NCBI::SVN::Replay::Init->new(
     MyName => basename($0), SVN => $TestRepo->{SVN});
 
@@ -93,6 +105,7 @@ ok(-d "$TargetWorkingCopy/branches/feat");
 ok(!-e "$TargetWorkingCopy/branches/feat/inner");
 
 $TestRepo->Put('trunk/new_outer/inner/file_2.txt', "file_2\n");
+$TestRepo->Put('trunk/new_outer/inner/subdir/file_3.txt', "file_3\n");
 $TestRepo->Commit('Create a new version of "outer"');
 $TestRepo->Move('trunk/new_outer', 'trunk/outer');
 $TestRepo->Commit('New version of "inner", indirectly');
@@ -100,6 +113,7 @@ $TestRepo->Commit('New version of "inner", indirectly');
 $Replay->Run($Conf, $TargetWorkingCopy);
 
 ok(-f "$TargetWorkingCopy/trunk/inner/file_2.txt");
+ok(-f "$TargetWorkingCopy/trunk/inner/subdir/file_3.txt");
 ok(!-e "$TargetWorkingCopy/trunk/inner/file_1.txt");
 
 $TestRepo->Put('trunk/outer/new_inner/file_3.txt', "file_3\n");
@@ -110,6 +124,16 @@ $TestRepo->Commit('New version of "inner"');
 $Replay->Run($Conf, $TargetWorkingCopy);
 
 ok(-f "$TargetWorkingCopy/trunk/inner/file_3.txt");
+
+$TestRepo->Put('trunk/outer/new_file_3.txt', "new_file_3\n");
+$TestRepo->Commit('Create a new version of "file_3.txt"');
+$TestRepo->Move('trunk/outer/new_file_3.txt', 'trunk/outer/inner/file_3.txt');
+$TestRepo->Commit('New version of "file_3.txt"');
+
+$Replay->Run($Conf, $TargetWorkingCopy);
+
+ok(-f "$TargetWorkingCopy/trunk/inner/file_3.txt");
+is(ReadFirstLine('trunk/inner/file_3.txt'), 'new_file_3');
 
 $TestRepo->Put('trunk/outer/inner/subdir/file_4.txt', "file_4\n");
 $TestRepo->Commit('Create "subdir"');
@@ -131,9 +155,7 @@ $TestRepo->Commit('Fix "file_5.txt" contents');
 
 $Replay->Run($Conf, $TargetWorkingCopy);
 
-open FILE5, '<', "$TargetWorkingCopy/trunk/inner/subdir/file_5.txt" or die;
-is(<FILE5>, 'file_5');
-close FILE5;
+is(ReadFirstLine('trunk/inner/subdir/file_5.txt'), 'file_5');
 
 chdir $OrigCurrDir;
 
