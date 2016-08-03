@@ -234,6 +234,13 @@ Limitations
   desired effect can sometimes be achieved by applying a chain
   of `svn_replay` transformations.
 
+Troubleshooting
+===============
+
+Anything doesn't look right?  Run `prove` while in the root
+directory of the project (or run `t/test.pl` if `prove` is not
+available).  File a bug.
+
 Disclaimer
 ==========
 
