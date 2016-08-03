@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 15;
+use Test::More tests => 17;
 
 use File::Basename;
 use File::Spec;
@@ -156,6 +156,20 @@ $TestRepo->Commit('Fix "file_5.txt" contents');
 $Replay->Run($Conf, $TargetWorkingCopy);
 
 is(ReadFirstLine('trunk/inner/subdir/file_5.txt'), 'file_5');
+
+$TestRepo->Delete('trunk/outer/inner/file_3.txt');
+$TestRepo->Put('trunk/outer/inner/file_3.txt', 'new_file_3');
+$TestRepo->Commit('Replace "file_3.txt"');
+$TestRepo->Put('trunk/outer/inner/subdir/new_file_5.txt', 'new_file_5');
+$TestRepo->Commit('Create a new version of "file_5.txt"');
+$TestRepo->Move('trunk/outer/inner/subdir/new_file_5.txt',
+    'trunk/outer/inner/subdir/file_5.txt');
+$TestRepo->Commit('Replace "file_5.txt" with new version');
+
+$Replay->Run($Conf, $TargetWorkingCopy);
+
+is(ReadFirstLine('trunk/inner/file_3.txt'), 'new_file_3');
+is(ReadFirstLine('trunk/inner/subdir/file_5.txt'), 'new_file_5');
 
 chdir $OrigCurrDir;
 
