@@ -230,9 +230,10 @@ Limitations
   `PathMapping` configuration section.
 
 - The employed path mapping scheme is not flexible enough to
-  describe arbitrary repository restructuring. However, the
-  desired effect can sometimes be achieved by applying a chain
-  of `svn_replay` transformations.
+  describe arbitrary repository restructuring (for example,
+  merging into a single target directory). In some cases, however,
+  the desired effect can be achieved by applying a chain of
+  `svn_replay` transformations and/or using `PreCommitHook`.
 
 Troubleshooting
 ===============
