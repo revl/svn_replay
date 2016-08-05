@@ -27,12 +27,13 @@ use base qw(NCBI::SVN::Base);
 
 use NCBI::SVN::Replay::Conf;
 use NCBI::SVN::Replay::SourceRepo;
+use NCBI::SVN::Replay::TargetRepo;
 use NCBI::SVN::Replay::RevisionQueue;
 
 use File::Find ();
 
 # Global variables
-my ($SVN, $TargetRepositoryURL, $CommitCredentials);
+my ($SVN, $CommitCredentials);
 
 sub IsFile
 {
@@ -84,60 +85,6 @@ sub Delete
     my ($TargetPathname) = @_;
 
     $SVN->RunSubversion(qw(rm --force), $TargetPathname)
-}
-
-my $LogChunkSize = 100;
-
-sub FindTargetRevBySourceRev
-{
-    my ($SourceRepo, $SourceRevNumber) = @_;
-
-    my $TargetRevisions = $SVN->ReadLog('--limit',
-        $LogChunkSize, $TargetRepositoryURL);
-
-    for (;;)
-    {
-        my $TargetRevNumber = 0;
-
-        for my $TargetRev (@$TargetRevisions)
-        {
-            $TargetRevNumber = $TargetRev->{Number};
-
-            my $OriginalRev = $SVN->ReadSubversionStream(qw(pg --revprop -r),
-                $TargetRevNumber, $SourceRepo->OriginalRevPropName(),
-                $TargetRepositoryURL);
-
-            die "Could not get original revision for $SourceRevNumber\n"
-                unless $OriginalRev;
-
-            chomp $OriginalRev;
-
-            if ($OriginalRev <= $SourceRevNumber)
-            {
-                print "WARNING: using older original revision $OriginalRev\n"
-                    if $OriginalRev < $SourceRevNumber;
-
-                return $TargetRevNumber
-            }
-        }
-
-        --$TargetRevNumber;
-
-        for (;;)
-        {
-            return 0 if $TargetRevNumber <= 0;
-
-            my $Bound = $TargetRevNumber > $LogChunkSize ?
-                $TargetRevNumber - $LogChunkSize + 1 : 1;
-
-            $TargetRevisions = $SVN->ReadLog('-r',
-                $TargetRevNumber . ':' . $Bound, $TargetRepositoryURL);
-
-            last if @$TargetRevisions;
-
-            $TargetRevNumber = $Bound - 1
-        }
-    }
 }
 
 sub CutOffParent
@@ -534,9 +481,11 @@ sub BeginWorkingCopyChange
 
 sub ApplyRevisionChanges
 {
-    my ($Self, $Revision) = @_;
+    my ($Self, $Revision, $TargetRepo) = @_;
 
     my ($SourceRepo, $SourceRevisionNumber) = @$Revision{qw(SourceRepo Number)};
+
+    my $TargetRepositoryURL = $TargetRepo->{RepoURL};
 
     my $SourceRepoConf = $SourceRepo->{Conf};
 
@@ -632,7 +581,7 @@ sub ApplyRevisionChanges
                         $Action .= 'ByCopying';
                         push @Args, JoinPaths($TargetRepositoryURL,
                                 JoinPaths($CopyMapping->{TargetPath}, $RelativeCopyFromPath)),
-                            FindTargetRevBySourceRev(
+                            $TargetRepo->FindTargetRevBySourceRev(
                                 $SourceRepo, $CopyFromRevInSourceRepo)
                     }
                     else
@@ -684,8 +633,9 @@ sub ApplyRevisionChanges
 
                 $CopyFromPathInSourceRepo =~ s/^\/+//so;
 
-                my $CopyFromRevInTargetRepo = FindTargetRevBySourceRev(
-                    $SourceRepo, $CopyFromRevInSourceRepo);
+                my $CopyFromRevInTargetRepo =
+                    $TargetRepo->FindTargetRevBySourceRev(
+                        $SourceRepo, $CopyFromRevInSourceRepo);
 
                 for (@SourcePaths_ChildrenOfChangedPath)
                 {
@@ -847,11 +797,11 @@ sub Run
     chdir $TargetWorkingCopy or
         die "$Self->{MyName}: could not chdir to $TargetWorkingCopy.\n";
 
-    $SVN->RunSubversion(qw(update --ignore-externals));
+    my $TargetRepo = NCBI::SVN::Replay::TargetRepo->new(
+            TargetPaths => $Conf->{TargetPaths},
+            MyName => $Self->{MyName}, SVN => $SVN);
 
-    my $TargetPathInfo = $SVN->ReadInfo('.', grep {-e} @{$Conf->{TargetPaths}});
-
-    $TargetRepositoryURL = $TargetPathInfo->{'.'}->{Root};
+    my $TargetPathInfo = $TargetRepo->{TargetPathInfo};
 
     my @SourceRepos;
 
@@ -892,7 +842,7 @@ sub Run
 
     do
     {
-        $ChangesApplied += $Self->ApplyRevisionChanges($Revision)
+        $ChangesApplied += $Self->ApplyRevisionChanges($Revision, $TargetRepo)
     }
     while ($Revision = $RevisionQueue->NextOldestRevision());
 
