@@ -6,32 +6,34 @@ Subversion repositories into another (usually new) repository.
 
 1. Create a configuration file:
 
-       $ cat > extract_gem.conf
-       {
-           SourceRepositories =>
-           [
-               {
-                   RepoName => 'source_repo',
-                   RootURL => 'https://svn/repos/source_repo',
-                   PathMapping =>
-                   [
-                       {
-                           SourcePath => 'trunk/projects/gem',
-                           TargetPath => 'trunk'
-                       }
-                   ]
-               }
-           ]
-       }
+    ```
+    $ cat > extract_gem.conf
+    {
+        SourceRepositories =>
+        [
+            {
+                RepoName => 'source_repo',
+                RootURL => 'https://svn/repos/source_repo',
+                PathMapping =>
+                [
+                    {
+                        SourcePath => 'trunk/projects/gem',
+                        TargetPath => 'trunk'
+                    }
+                ]
+            }
+        ]
+    }
+    ```
 
 2. Initialize the target repository:
 
-       svn_replay.pl -i gem_repo extract_gem.conf gem_repo_checkout
+        svn_replay.pl -i gem_repo extract_gem.conf gem_repo_checkout
 
 3. Perform the replication (depending on the number of revisions
    in `source_repo`, this process may take a long time):
 
-       svn_replay.pl extract_gem.conf gem_repo_checkout >> gem_repo.log
+        svn_replay.pl extract_gem.conf gem_repo_checkout >> gem_repo.log
 
    Optionally, the above command can be run periodically from
    `cron` to continue updating `gem_repo` with the latest changes
