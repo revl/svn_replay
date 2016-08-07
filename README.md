@@ -1,10 +1,49 @@
-svn_replay
-==========
+TL;DR
+=====
+
+Extract once or replicate repeatedly parts of one or more
+Subversion repositories into another (usually new) repository.
+
+1. Create a configuration file:
+
+       $ cat > extract_gem.conf
+       {
+           SourceRepositories =>
+           [
+               {
+                   RepoName => 'source_repo',
+                   RootURL => 'https://svn/repos/source_repo',
+                   PathMapping =>
+                   [
+                       {
+                           SourcePath => 'trunk/projects/gem',
+                           TargetPath => 'trunk'
+                       }
+                   ]
+               }
+           ]
+       }
+
+2. Initialize the target repository:
+
+       svn_replay.pl -i gem_repo extract_gem.conf gem_repo_checkout
+
+3. Perform the replication (depending on the number of revisions
+   in `source_repo`, this process may take a long time):
+
+       svn_replay.pl extract_gem.conf gem_repo_checkout >> gem_repo.log
+
+   Optionally, the above command can be run periodically from
+   `cron` to continue updating `gem_repo` with the latest changes
+   from the source repository.
+
+How It Works
+============
 
 This tool was created for internal use and with a single purpose.
 It wasn't meant to be reused, let alone open sourced.
 Yet I keep coming back to it whenever I need to perform a "surgery"
-that `svndumpfilter` wasn't designed to handle. And so the tool is
+that `svnsync` wasn't designed to handle. And so the tool is
 released into the wild in hope that someone finds it useful.
 
 `svn_replay` works by reading changesets of one or more source
@@ -31,8 +70,8 @@ source repositories are sorted by their commit dates and times.
 The relative order of changesets coming from each particular
 repository is preserved though.
 
-How to Install
-==============
+Installation
+============
 
 No installation required: simply run `svn_replay.pl` from the root
 directory. A symbolic link to the script can be created if needed.
@@ -40,8 +79,8 @@ directory. A symbolic link to the script can be created if needed.
 The script has no CPAN dependencies; all modules that it uses are
 either bundled or come standard with Perl.
 
-How to Configure
-================
+Configuration
+=============
 
 The configuration file for `svn_replay` is a simple Perl script,
 which must end with a HASH definition.
