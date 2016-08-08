@@ -69,8 +69,8 @@ destination directories.
 When `svn_replay` is used to merge or cherry-pick changes from two
 or more source repositories, changesets that come from different
 source repositories are sorted by their commit dates and times.
-The relative order of changesets coming from each particular
-repository is preserved though.
+Of course, the relative order of changesets coming from each
+particular repository is preserved.
 
 Installation
 ============
@@ -79,7 +79,7 @@ No installation required: simply run `svn_replay.pl` from the root
 directory. A symbolic link to the script can be created if needed.
 
 The script has no CPAN dependencies; all modules that it uses are
-either bundled or come standard with Perl.
+either bundled with the project or come standard with Perl.
 
 Configuration
 =============
@@ -112,19 +112,20 @@ directory inside the target repository.
 
 The only required parameter in the root configuration hash is
 `SourceRepositories`. The value of this key is an array of hashes,
-each referring to a single source repository.
+each referring to a single source repository.  The example
+above uses only one source repository and therefore its
+`SourceRepositories` array contains a single hash.
 
-The example above uses only one source repository and therefore
-its `SourceRepositories` array contains only one hash. The keys of
-that hash are as follows:
+Each hash in the `SourceRepositories` array must contain the
+following three keys:
 
 - `RepoName` defines the name of the source repository.  This name
-  is used internally and also appears in the output of the script.
-  Note that because there is only one target repository, it does
-  not need a name.
+  is used internally and also appears in the progress log.
+  Because there is only one target repository, it does not need a
+  name.
 
-- `RootURL` defines the URL that will be used for repository
-  access.
+- `RootURL` defines the URL that will be used to read from the
+  repository.
 
 - `PathMapping` is the primary configuration parameter and defines
   a one-to-one mapping of a set of non-overlapping directories in
@@ -166,11 +167,10 @@ sibling directories in the target repository:
 }
 ```
 
-Just like there can be multiple source repositories, there can be
-multiple `PathMapping` elements for each repository.  Here's an
-example where pathnames of the `include` and `src` directories of
-a C library are rewritten so that the library has its own private
-directory.
+For each repository, multiple `PathMapping` elements can be
+defined.  Here's an example where pathnames of the separated
+`include` and `src` directories of a C library are rewritten
+so that the library gets its own private directory.
 
 ```perl
 {
@@ -215,13 +215,14 @@ can also contain the following optional ones:
   the target repository modifications are committed. The commit is
   aborted if this subroutine returns zero, in which case it's the
   responsibility of the pre-commit subroutine to clean up the
-  working copy (revert all changes made by `svn_replay`).
+  working copy (that is, revert all changes, including those made
+  by `svn_replay` itself).
 
 The root hash can also contain the `CommitCredentials` key if the
 target repository requires authentication. The value of this key
 must be either a two-element array, in which case it's interpreted
-as a username-password pair, or a scalar, if only the username is
-needed.
+as a username-password pair, or a scalar, if providing only the
+username will suffice.
 
 For the most complete example of a configuration file, see the
 bundled `svn_replay.example.conf`.
@@ -230,7 +231,7 @@ How to Run
 ==========
 
 The script has two modes of operation, each described in its own
-chapter below.
+section below.
 
 Target Repository Initialization
 --------------------------------
@@ -253,8 +254,8 @@ Incremental Replication
 
 This is the normal mode of operation. When the `-i` option is not
 specified, the script iterates over the source repositories to
-check for new revisions. If any new changes have been made since
-the last run in the configured source paths, those changes are
+check for new revisions. If the configured source paths have
+received any new changes since the last run, those changes are
 replicated in the target repository.
 
 The script logs information about its progress to the standard
