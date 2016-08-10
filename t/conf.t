@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 23;
+use Test::More tests => 24;
 
 use File::Basename;
 use File::Spec;
@@ -92,6 +92,12 @@ $OneMapping{SourcePath} = 'from/path';
 # Verify that TargetPath is required.
 eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
 like($@, qr(missing.*TargetPath), 'Require TargetPath');
+
+$OneMapping{TargetPath} = '/';
+
+# Cannot use '/' for a path.
+eval {NCBI::SVN::Replay::Conf->new(\%ConfHash)};
+like($@, qr(invalid target path), 'Paths cannot be "/"');
 
 $OneMapping{TargetPath} = 'to/path';
 

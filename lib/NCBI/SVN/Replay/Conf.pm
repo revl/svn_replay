@@ -79,7 +79,11 @@ sub BuildTree
 
         my $NodeRef = \$Root;
 
-        for my $Dir (split('/', $Path))
+        my @Dirs = split('/', $Path);
+
+        @Dirs > 0 or die "$ConfFile\: invalid $PathType path '$Path'.\n";
+
+        for my $Dir (@Dirs)
         {
             next unless $Dir;
 
