@@ -221,11 +221,11 @@ can also contain the following optional ones:
 The root hash can also contain the `CommitCredentials` key if the
 target repository requires authentication. The value of this key
 must be either a two-element array, in which case it's interpreted
-as a username-password pair, or a scalar, if providing only the
+as a username-password pair or a scalar if providing only the
 username will suffice.
 
-For the most complete example of a configuration file, see the
-bundled `svn_replay.example.conf`.
+For a complete configuration file example, see the bundled
+`svn_replay.example.conf`.
 
 How to Run
 ==========
@@ -280,9 +280,9 @@ Limitations
 Troubleshooting
 ===============
 
-Anything doesn't look right?  Run `prove` while in the root
-directory of the project (or run `t/test.pl` if `prove` is not
-available).  File a bug.
+If anything doesn't work the way it should, run `prove` while in
+the root directory of the project (or run `t/test.pl` if `prove`
+is not available).  Then file a bug.
 
 Disclaimer
 ==========
