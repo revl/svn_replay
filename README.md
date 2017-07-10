@@ -62,9 +62,16 @@ using the `file` protocol makes the replication process
 significantly faster).
 
 All source repositories can be edited normally during the
-replication. The target repository can also be modified externally
-provided that all changes happen outside the configured
-destination directories.
+replication.
+
+The target repository can also be modified externally provided
+that all changes happen outside the configured destination
+directories. In this case, consider setting the
+`PreserveCommitTimestamps` configuration parameter to `0`.
+Otherwise, `svn_replay` might violate the monotone increasing
+property of the commit timestamps in the target repository by
+making the timestamp of the replayed revision older than the
+timestamp of the latest manually committed revision.
 
 When `svn_replay` is used to merge or cherry-pick changes from two
 or more source repositories, changesets that come from different
@@ -218,11 +225,20 @@ can also contain the following optional ones:
   working copy (that is, revert all changes, including those made
   by `svn_replay` itself).
 
-The root hash can also contain the `CommitCredentials` key if the
-target repository requires authentication. The value of this key
-must be either a two-element array, in which case it's interpreted
-as a username-password pair or a scalar if providing only the
-username will suffice.
+The root hash can also contain the following optional keys:
+
+- `CommitCredentials` defines authentication parameters if
+  required by the target repository. The value of this key must be
+  either a two-element array, in which case it's interpreted as a
+  username-password pair or a scalar if providing only the username
+  will suffice.
+
+- `PreserveCommitTimestamps` determines whether commit timestamps
+  of the original revisions are preserved. This functionality is
+  enabled by default; set the parameter to `0` if the original
+  commit timestamps should not be preserved (for example, when the
+  `pre-revprop-change` hook in the target repository prohibits
+  this or when there are other committers besides svn_replay).
 
 For a complete configuration file example, see the bundled
 `svn_replay.example.conf`.

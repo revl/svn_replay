@@ -33,7 +33,7 @@ use NCBI::SVN::Replay::RevisionQueue;
 use File::Find ();
 
 # Global variables
-my ($SVN, $CommitCredentials);
+my ($SVN, $CommitCredentials, $PreserveCommitTimestamps);
 
 sub IsFile
 {
@@ -760,6 +760,7 @@ sub ApplyRevisionChanges
 
             delete $RevProps->{'svn:log'};
             delete $RevProps->{'svn:author'} unless $CommitCredentials;
+            delete $RevProps->{'svn:date'} unless $PreserveCommitTimestamps;
 
             $RevProps->{$SourceRepo->OriginalRevPropName()} =
                 $SourceRevisionNumber;
@@ -793,6 +794,9 @@ sub Run
                 '--password', $CommitCredentials->[1]] :
             ['--username', $CommitCredentials]
     }
+
+    $PreserveCommitTimestamps = exists $Conf->{PreserveCommitTimestamps} ?
+        $Conf->{PreserveCommitTimestamps} : 1;
 
     chdir $TargetWorkingCopy or
         die "$Self->{MyName}: could not chdir to $TargetWorkingCopy.\n";
