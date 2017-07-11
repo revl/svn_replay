@@ -67,7 +67,7 @@ replication.
 The target repository can also be modified externally provided
 that all changes happen outside the configured destination
 directories. In this case, consider setting the
-`PreserveCommitTimestamps` configuration parameter to `0`.
+`PreserveRevisionTimestamps` configuration parameter to `0`.
 Otherwise, `svn_replay` might violate the monotone increasing
 property of the commit timestamps in the target repository by
 making the timestamp of the replayed revision older than the
@@ -233,7 +233,7 @@ The root hash can also contain the following optional keys:
   username-password pair or a scalar if providing only the username
   will suffice.
 
-- `PreserveCommitTimestamps` determines whether commit timestamps
+- `PreserveRevisionTimestamps` determines whether commit timestamps
   of the original revisions are preserved. This functionality is
   enabled by default; set the parameter to `0` if the original
   commit timestamps should not be preserved (for example, when the
