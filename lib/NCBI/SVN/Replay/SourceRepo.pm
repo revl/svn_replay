@@ -56,7 +56,9 @@ sub LastSyncedRev
 
     for my $TargetPath (@{$Self->{Conf}->{TargetPaths}})
     {
-        if (my $Info = $Self->{TargetPathInfo}->{$TargetPath})
+        my $Info = $Self->{TargetPathInfo}->{$TargetPath};
+
+        if ($Info && $Info->{LastChangedRev})
         {
             my $OriginalRevPropName = $Self->OriginalRevPropName();
 
