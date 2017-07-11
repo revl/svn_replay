@@ -33,7 +33,8 @@ use NCBI::SVN::Replay::RevisionQueue;
 use File::Find ();
 
 # Global variables
-my ($SVN, $CommitCredentials, $PreserveRevisionTimestamps);
+my ($SVN, $CommitCredentials,
+    $PreserveRevisionTimestamps, $PreserveRevisionAuthors);
 
 sub IsFile
 {
@@ -745,7 +746,7 @@ sub ApplyRevisionChanges
         }
 
         my @AuthParams = $CommitCredentials ? @$CommitCredentials :
-            ('--username', $Revision->{Author});
+            $PreserveRevisionAuthors ? ('--username', $Revision->{Author}) : ();
 
         my $Output = $SVN->ReadSubversionStream(@AuthParams,
             qw(commit --force-log -m), $Revision->{LogMessage});
@@ -759,7 +760,8 @@ sub ApplyRevisionChanges
             my $RevProps = $SVN->ReadRevProps($SourceRevisionNumber, $RootURL);
 
             delete $RevProps->{'svn:log'};
-            delete $RevProps->{'svn:author'} unless $CommitCredentials;
+            delete $RevProps->{'svn:author'}
+                unless $CommitCredentials && $PreserveRevisionAuthors;
             delete $RevProps->{'svn:date'} unless $PreserveRevisionTimestamps;
 
             $RevProps->{$SourceRepo->OriginalRevPropName()} =
@@ -794,6 +796,9 @@ sub Run
                 '--password', $CommitCredentials->[1]] :
             ['--username', $CommitCredentials]
     }
+
+    $PreserveRevisionAuthors = exists $Conf->{PreserveRevisionAuthors} ?
+        $Conf->{PreserveRevisionAuthors} : 1;
 
     $PreserveRevisionTimestamps = exists $Conf->{PreserveRevisionTimestamps} ?
         $Conf->{PreserveRevisionTimestamps} : 1;

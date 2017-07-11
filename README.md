@@ -233,6 +233,10 @@ The root hash can also contain the following optional keys:
   username-password pair or a scalar if providing only the username
   will suffice.
 
+- `PreserveRevisionAuthors` determines whether original revision
+  authors are preserved when committing to the target repository.
+  This parameter is enabled by default.
+
 - `PreserveRevisionTimestamps` determines whether commit timestamps
   of the original revisions are preserved. This functionality is
   enabled by default; set the parameter to `0` if the original
