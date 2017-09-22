@@ -845,7 +845,7 @@ sub Run
 
     return 0 unless $Revision;
 
-    print "Applying new revision changes...\n";
+    print '[' . localtime() . "]\nApplying new revision changes...\n";
 
     my $ChangesApplied = 0;
 
