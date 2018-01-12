@@ -18,60 +18,12 @@
 #  purpose.
 #
 
+package NCBI::SVN::Wrapper;
+
 use strict;
 use warnings;
 
-package NCBI::SVN::Wrapper::Stream;
-
-use IPC::Open3;
-use File::Temp qw/tempfile/;
-use File::Spec;
-
-sub new
-{
-    my ($Class, $SVN) = @_;
-
-    return bless {SVN => $SVN}, $Class
-}
-
-sub Run
-{
-    my ($Self, @Args) = @_;
-
-    my $WriteFH;
-
-    unshift @Args, '--non-interactive' unless grep {m/^add$/o} @Args;
-
-    $Self->{PID} = open3($WriteFH, $Self->{ReadFH},
-        $Self->{ErrorFH} = tempfile(),
-        $Self->{SVN}->GetSvnPathname(), @Args);
-
-    close $WriteFH
-}
-
-sub ReadLine
-{
-    return readline $_[0]->{ReadFH}
-}
-
-sub Close
-{
-    my ($Self) = @_;
-
-    return unless exists $Self->{PID};
-
-    local $/ = undef;
-    my $ErrorText = readline $Self->{ErrorFH};
-
-    close($Self->{ReadFH});
-    close($Self->{ErrorFH});
-
-    waitpid(delete $Self->{PID}, 0);
-
-    die $ErrorText if $?
-}
-
-package NCBI::SVN::Wrapper;
+use NCBI::SVN::Wrapper::Stream;
 
 use Carp qw(confess);
 use Time::Local;
