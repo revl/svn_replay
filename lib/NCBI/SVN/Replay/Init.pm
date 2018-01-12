@@ -74,9 +74,9 @@ sub Run
 
     my $HookScript = "$InitPath/hooks/pre-revprop-change";
 
-    open HOOK, '>', $HookScript or die "$HookScript: $!\n";
-    print HOOK "#!/bin/sh\n\nexit 0\n";
-    close HOOK;
+    open my $Hook, '>', $HookScript or die "$HookScript: $!\n";
+    print $Hook "#!/bin/sh\n\nexit 0\n";
+    close $Hook;
     chmod 0755, $HookScript or die "$HookScript: $!\n";
 
     require File::Spec;

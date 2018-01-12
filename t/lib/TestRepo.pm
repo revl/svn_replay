@@ -25,9 +25,9 @@ sub new
     $SVN->RunOrDie(qw(svnadmin create), $RepoPath);
 
     my $Hook = "$RepoPath/hooks/pre-revprop-change";
-    open FILE, '>', $Hook or die;
-    print FILE "#!/bin/sh\nexit 0\n" or die;
-    close FILE;
+    open my $File, '>', $Hook or die;
+    print $File "#!/bin/sh\nexit 0\n" or die;
+    close $File;
     chmod 0755, $Hook or die;
 
     my $RepoURL = $Self->{RepoURL} = 'file://' . $RepoPath;
@@ -80,9 +80,9 @@ sub Put
 
     my $FileExisted = -e $FilePath;
 
-    open FILE, '>', $FilePath or die "$FilePath\: $!";
-    print FILE $FileContents;
-    close FILE;
+    open my $File, '>', $FilePath or die "$FilePath\: $!";
+    print $File $FileContents;
+    close $File;
 
     $Self->{SVN}->RunSubversion('add', $FilePath) unless $FileExisted;
 

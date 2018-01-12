@@ -63,9 +63,9 @@ sub ReadFirstLine
 {
     my ($FilePath) = @_;
 
-    open FILE, '<', "$TargetWorkingCopy/$FilePath" or die "$FilePath\: $!";
-    my $FirstLine = <FILE>;
-    close FILE;
+    open my $File, '<', "$TargetWorkingCopy/$FilePath" or die "$FilePath\: $!";
+    my $FirstLine = <$File>;
+    close $File;
 
     chomp $FirstLine;
     return $FirstLine
