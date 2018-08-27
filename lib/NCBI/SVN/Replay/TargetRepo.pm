@@ -56,10 +56,13 @@ sub FindTargetRevBySourceRev
     my $SVN = $Self->{SVN};
 
     my $RepoURL = $Self->{RepoURL};
-    my $TargetPaths = $SourceRepo->{Conf}->{TargetPaths};
+    my @TargetPaths = grep {-e} @{$SourceRepo->{Conf}->{TargetPaths}};
+
+    die "Cannot get original revision for $SourceRevNumber\: " .
+        "none of the target paths exists yet.\n" unless @TargetPaths;
 
     my $TargetRevisions = $SVN->ReadLog('--limit', $LogChunkSize,
-        $RepoURL, @$TargetPaths);
+        $RepoURL, @TargetPaths);
 
     for (;;)
     {
@@ -96,7 +99,7 @@ sub FindTargetRevBySourceRev
                 $TargetRevNumber - $LogChunkSize + 1 : 1;
 
             $TargetRevisions = $SVN->ReadLog('-r', "$TargetRevNumber\:$Bound",
-                $RepoURL, @$TargetPaths);
+                $RepoURL, @TargetPaths);
 
             last if @$TargetRevisions;
 
