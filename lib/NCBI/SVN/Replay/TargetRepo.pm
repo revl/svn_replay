@@ -56,8 +56,10 @@ sub FindTargetRevBySourceRev
     my $SVN = $Self->{SVN};
 
     my $RepoURL = $Self->{RepoURL};
+    my $TargetPaths = $SourceRepo->{Conf}->{TargetPaths};
 
-    my $TargetRevisions = $SVN->ReadLog('--limit', $LogChunkSize, $RepoURL);
+    my $TargetRevisions = $SVN->ReadLog('--limit', $LogChunkSize,
+        $RepoURL, @$TargetPaths);
 
     for (;;)
     {
@@ -93,8 +95,8 @@ sub FindTargetRevBySourceRev
             my $Bound = $TargetRevNumber > $LogChunkSize ?
                 $TargetRevNumber - $LogChunkSize + 1 : 1;
 
-            $TargetRevisions = $SVN->ReadLog('-r',
-                $TargetRevNumber . ':' . $Bound, $RepoURL);
+            $TargetRevisions = $SVN->ReadLog('-r', "$TargetRevNumber\:$Bound",
+                $RepoURL, @$TargetPaths);
 
             last if @$TargetRevisions;
 
